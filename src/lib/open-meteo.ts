@@ -126,6 +126,57 @@ async function getJson(url: string): Promise<unknown> {
 }
 
 /**
+ * Resolve a typed place to several candidates, nearest-first to a hint point.
+ *
+ * `geocode` below takes the first result, which is right for a destination
+ * someone typed into the trip form. It is wrong for a neighbourhood: the API
+ * returns matches worldwide, so "Wicker Park" comes back as Illinois *and*
+ * Indiana, and "Logan Square" as Illinois *and* Pennsylvania. Both are real
+ * responses, checked rather than imagined.
+ *
+ * Given a hint — the centre of the bikeshare system the trip is in — the
+ * nearest candidate is the right one, and nobody is asked to disambiguate.
+ *
+ * One more thing worth knowing: the API wants the bare name. "Wicker Park"
+ * resolves; "Lincoln Park Chicago" returns nothing at all. Don't help it by
+ * appending the city.
+ */
+export async function geocodeNear(
+  name: string,
+  hint: { lat: number; lon: number },
+  count = 8,
+): Promise<Place[]> {
+  const query = name.trim();
+  if (query.length < 2) return [];
+
+  const body = (await getJson(
+    `${GEOCODE}?name=${encodeURIComponent(query)}&count=${count}&language=en&format=json`,
+  )) as {
+    results?: {
+      latitude: number;
+      longitude: number;
+      name: string;
+      country?: string;
+      country_code?: string;
+      admin1?: string;
+    }[];
+  };
+
+  return (body.results ?? [])
+    .map((r) => ({
+      lat: r.latitude,
+      lon: r.longitude,
+      label: [r.name, r.admin1].filter(Boolean).join(", "),
+      countryCode: r.country_code,
+    }))
+    .sort(
+      (a, b) =>
+        (a.lat - hint.lat) ** 2 + (a.lon - hint.lon) ** 2 -
+        ((b.lat - hint.lat) ** 2 + (b.lon - hint.lon) ** 2),
+    );
+}
+
+/**
  * Resolve a typed destination to coordinates.
  *
  * Returns null when nothing matched. Note the shape that means "nothing":
