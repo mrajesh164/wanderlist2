@@ -27,6 +27,7 @@ import {
 } from "@/lib/trips";
 import { categoriesPresent, type Item } from "@/lib/types";
 import { buildInventory, ownedCounts, shortfall } from "@/lib/inventory";
+import { StationBoard } from "@/components/StationBoard";
 
 /**
  * The checklist. The core task, and the screen this app exists for.
@@ -219,6 +220,12 @@ function Checklist() {
           endDate={trip.endDate}
         />
       )}
+
+      {/* Live bikes at the destination. Sits here, with the conditions strip
+          and before the packing list, because it answers "what is it like
+          there" rather than "what should I bring" — a peer of the climate
+          half of this page, not an appendix to the list. */}
+      <StationBoard destination={trip.destination} />
 
       {/* --- progress --- */}
       {total > 0 && (
