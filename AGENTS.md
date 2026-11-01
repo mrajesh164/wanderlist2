@@ -16,9 +16,15 @@ Packing lists for your favorite destinations. You keep the trips you take again 
 the last time you took it, and already adjusted for how long you're going and what
 the weather does there that month.
 
-Course: Design, Build, Ship · MPCS 51238 · Assignment 4 (Full Stack App).
-Due Tuesday, October 27 2026, 5:30 PM. Assignment 3's work is on `main`; this
-branch adds accounts, a database and one external API on top of it.
+Course: Design, Build, Ship · MPCS 51238 · **Assignment 5 (Live Data System)**.
+Due Tuesday, November 3 2026, 5:30 PM. This repository starts from the finished
+Assignment 4 app — 80 commits of it — and adds a worker, live bikeshare data and
+a page that updates on its own. The work happens on the `live-data` branch.
+
+Assignment 4's own notes are kept below rather than rewritten, because the
+reasoning behind the data model, the Clerk constraints and the design system all
+still hold. Where a section says "Assignment 4", read it as *how the app that this
+one extends came to be*. The new work is in **Assignment 5 — the live layer**.
 
 ## The three flows
 
@@ -383,6 +389,244 @@ easier to lose than the code:
   screen, and signed out it walked people into a trip that had never been
   saved.
 
+## Assignment 5 — the live layer
+
+Assignment 5 adds a worker that polls a live source every few seconds and a page
+that updates on its own. This section is the plan, **written before any code**,
+which is what step 3 of the brief asks for. Read it before writing a migration or
+the worker.
+
+### The source, and why this one
+
+**Bikeshare station availability, over GBFS.** Picked over weather (normals don't
+change), live scores and earthquakes for one reason that should be stated plainly:
+
+> **Ambient data beats episodic data.** Anything tied to one person's *trip* —
+> their flight, their game — only moves while that trip is happening, and will be
+> a still photograph at 5:30 on a Tuesday when someone grades it. Bikes come and
+> go in Chicago at 2am whether or not anybody is travelling.
+
+Three things were measured before committing, not assumed:
+
+| | |
+| --- | --- |
+| Stations in the Chicago feed | 2,078 |
+| Changed between two calls 120s apart | **72 — 3.5%** |
+| Feed's advertised `ttl` | 60 seconds |
+
+That 3.5% is the whole argument for the upsert: **the worker writes 72 rows, not
+2,078**, and `worker_runs` records the number so the claim is checkable rather
+than rhetorical.
+
+**GBFS is a standard, not one city.** Divvy's auto-discovery document resolves to
+`https://gbfs.lyft.com/gbfs/1.1/chi/en/…` — the city code sits right in the path,
+so NYC, Boston, DC and the Bay Area are the same shape with a different slug. That
+maps onto the destination-slug matching the app already does for climate.
+
+One thing checked because it would have been a silent, expensive bug: the
+`station_id` values in `station_information.json` and `station_status.json` are
+the **same id space** — all 2,078 overlap, on both the `divvybikes.com` and
+`lyft.com` hosts. The join is safe.
+
+### How data moves
+
+```mermaid
+flowchart LR
+    GBFS["GBFS feed<br/>station_status.json<br/><i>refreshes every 60s</i>"]
+    W["Edge Function<br/>poll-stations<br/><i>Supabase Cron, every 30s</i>"]
+    DB[("Postgres")]
+    P["Next.js page<br/>on Vercel"]
+
+    GBFS -->|"fetch, once per followed system"| W
+    W -->|"upsert ONLY changed rows<br/>(secret key)"| DB
+    W -->|"one row per run"| DB
+    DB -->|"Realtime: one message per changed row"| P
+    P -->|"reads follows + stations<br/>(caller's Clerk token, RLS)"| DB
+```
+
+Reading it out, which is the thing to be able to do in class:
+
+1. **Cron → worker.** Supabase Cron invokes the function every 30 seconds.
+2. **Worker → GBFS.** It reads the set of systems that at least one person
+   follows, and fetches `station_status.json` once per system.
+3. **Worker → database.** It compares each followed station against what's already
+   stored and upserts only rows whose counts actually moved. Then it writes one
+   row to `worker_runs`.
+4. **Database → page.** Realtime pushes each changed `stations` row to every open
+   page subscribed to it.
+5. **Page → database.** On load, the page reads the person's follows and the
+   current station rows with the caller's Clerk token, so RLS decides what they
+   see.
+
+**What breaks if one part changes its half:** if GBFS renames a field the worker
+writes nulls and `rows_changed` quietly drops to zero — which is why the runs
+table records a count and not just a boolean. If the worker writes every row
+instead of changed ones, Realtime burns a month of messages in hours. If the
+`stations` table is dropped from the Realtime publication, the page simply gets
+nothing, with no error at all.
+
+### Four new tables
+
+Same split the app already uses and has already defended: **reference data nobody
+owns, plus one table fenced per person.**
+
+#### bike_systems — reference, read-only
+
+The catalog of supported GBFS systems. Seeded by migration; a new city is one
+`insert`, not a redeploy.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `slug` | `text` pk | `chi`, `nyc`, `bos` — the code in the GBFS URL |
+| `name` | `text not null` | "Divvy" |
+| `city` | `text not null` | "Chicago" — matched against a trip's destination |
+| `status_url` | `text not null` | `station_status.json` |
+| `information_url` | `text not null` | `station_information.json` |
+| `ttl_seconds` | `integer not null default 60` | what the feed advertises |
+
+#### stations — live rows, owned by nobody
+
+One row per station, carrying both the static description and the live counts, so
+the page needs no join to render a name.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `system_slug` | `text not null` | → `bike_systems.slug` |
+| `station_id` | `text not null` | GBFS id, stable across both feed files |
+| `name` | `text not null` | "Pulaski Rd & 60th Pl" |
+| `lat` / `lon` | `double precision` | from `station_information` |
+| `capacity` | `integer` | |
+| `bikes_available` | `integer` | live |
+| `ebikes_available` | `integer` | live |
+| `docks_available` | `integer` | live |
+| `last_reported` | `timestamptz` | the feed's own timestamp, not ours |
+| `updated_at` | `timestamptz not null default now()` | when *we* last wrote it |
+
+Primary key `(system_slug, station_id)` — that composite is what the upsert
+conflicts on.
+
+**Static and live columns are filled on different clocks.** `station_information`
+is fetched when a system gains its first follower (and at most hourly after);
+`station_status` is fetched every run. Don't collapse these into one fetch — the
+information file is 1.1 MB and almost never changes.
+
+#### station_follows — one person's choices, RLS fenced
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` pk, `gen_random_uuid()` | |
+| `user_id` | `text not null` | Clerk `sub`, **text not uuid** — see the A4 note |
+| `system_slug` | `text not null` | |
+| `station_id` | `text not null` | |
+| `trip_id` | `uuid` | optional → `trips.id`, so a follow can hang off a trip |
+| `created_at` | `timestamptz not null default now()` | |
+
+`unique (user_id, system_slug, station_id)` — following twice is a no-op, not an
+error. That is the same lesson as "already in your inventory": a repeat is a
+reasonable request, not a mistake.
+
+#### worker_runs — the record of every run
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `uuid` pk, `gen_random_uuid()` | |
+| `started_at` | `timestamptz not null default now()` | |
+| `finished_at` | `timestamptz` | |
+| `ok` | `boolean not null` | |
+| `systems_polled` | `integer not null default 0` | |
+| `rows_changed` | `integer not null default 0` | **the 72-not-2078 number** |
+| `error` | `text` | null when `ok` |
+
+The page reads this table to decide between *stale* and *down*, so it has to be
+readable by any signed-in user — it holds nobody's personal data.
+
+### Row-level security
+
+Enable RLS on all four. The pattern is already established, including the trap:
+
+```sql
+-- station_follows: all four policies, and insert/update need WITH CHECK.
+-- Without it, USING alone lets someone write a row stamped with another
+-- person's user_id. This is exactly what /security-review caught in A4.
+create policy "own follows: select" on station_follows for select
+  using ((auth.jwt() ->> 'sub') = user_id);
+create policy "own follows: insert" on station_follows for insert
+  with check ((auth.jwt() ->> 'sub') = user_id);
+create policy "own follows: update" on station_follows for update
+  using ((auth.jwt() ->> 'sub') = user_id)
+  with check ((auth.jwt() ->> 'sub') = user_id);
+create policy "own follows: delete" on station_follows for delete
+  using ((auth.jwt() ->> 'sub') = user_id);
+
+-- bike_systems, stations, worker_runs: readable by any signed-in user,
+-- writable by nobody. The refusal is explicit rather than a missing policy,
+-- so it is visible in pg_policies instead of looking like an oversight.
+create policy "live data: read" on stations for select to authenticated using (true);
+create policy "live data: no writes" on stations for all to authenticated with check (false);
+```
+
+Only the worker writes the three shared tables, holding the service role key that
+Supabase hands it on its own servers. That key never appears in the repository —
+the same rule `lib/supabase-admin.ts` already follows for `climate_cache`.
+
+### The decision that protects both free tiers
+
+**The worker writes only stations somebody actually follows.** Not all 2,078.
+
+Realtime bills every change sent to every open page, and the brief warns a worker
+that rewrites every row can spend a month of messages in a few hours. Writing only
+followed stations takes a realistic run from ~72 rows to a handful.
+
+The cost, accepted knowingly: a station someone has just started following shows
+no live counts until the next run, which is at most 30 seconds. The browse list is
+still complete, because static station rows are loaded for the whole system when
+it gains its first follower.
+
+**Cadence: every 30 seconds.** The feed only republishes every 60, so polling
+faster buys nothing; polling at 30 means a change is visible within about half a
+refresh window. That is 86,400 invocations a month against a 500,000 allowance.
+Runs that find nothing changed are normal and will show `rows_changed: 0` — that
+is the upsert working, not a fault.
+
+### The four states the page must design
+
+Thresholds are expressed in cron intervals so they stay correct if the interval
+changes.
+
+| State | Condition | What it says |
+| --- | --- | --- |
+| **Loading** | no run read yet | first paint, nothing known |
+| **Fresh** | last `ok` run ≤ 2 intervals (60s) | the counts are current |
+| **Stale** | last `ok` run 2–10 intervals old | "last updated 4 minutes ago" — the data is real but ageing |
+| **Down** | latest run has `ok = false`, or no `ok` run in 10 intervals | the worker is failing, and say so rather than showing numbers as if they were live |
+
+*Stale* and *down* are genuinely different and must not look the same: stale means
+the pipe is slow, down means it is broken. The runs table is what tells them
+apart, which is the reason it exists.
+
+### Repo layout — one repo, two runtimes
+
+No workspaces, no `apps/` restructure. `supabase/` already sits beside `src/`:
+
+```
+wanderlist2/
+├── src/                     ← Next.js, deploys to Vercel
+├── supabase/
+│   ├── migrations/          ← 7 from A4, plus A5's
+│   ├── functions/
+│   │   ├── _shared/         ← underscore: not deployed as a function
+│   │   └── poll-stations/
+│   │       └── index.ts     ← Deno. Deploys to Supabase.
+│   └── config.toml
+└── tsconfig.json
+```
+
+**`"supabase"` is in `tsconfig.json`'s `exclude`, and must stay there.** Without
+it `next build` type-checks Deno code and fails on `Deno` being undefined. Note
+the subtlety: `exclude` only drops files from the initial glob — if anything under
+`src/` *imports* a file under `supabase/`, TypeScript pulls it back in and checks
+it. Keep anything shared to plain types with no `Deno.` and no remote imports.
+
 ## Hard constraints
 
 These come from the assignment brief. Do not violate them, and push back if asked to.
@@ -392,6 +636,24 @@ said no external APIs, no database and no accounts; the brief now requires all
 three, and all three are built. The notes below are the current rules. Anywhere
 this file mentions `localStorage`, it is describing what Assignment 3 did and
 what replaced it — never current behaviour.
+
+**Assignment 5 adds four more, and relaxes one.**
+
+- **A worker runs on a schedule**, as a Supabase Edge Function invoked by Supabase
+  Cron. It writes with the service role key, which Supabase supplies on its own
+  servers and which never enters the repository.
+- **The page updates without a refresh**, over Supabase Realtime, and must design
+  loading, fresh, stale and down. Realtime fails *silently* when any of its three
+  prerequisites is missing — table in the publication, read access, an RLS policy
+  that lets the person read it — so check all three before debugging code.
+- **Each person chooses what they follow**, with row-level security on those
+  choices.
+- **One live source**, and it is bikeshare over GBFS. Open-Meteo stays where it is;
+  it supplies monthly climate normals to the packing list and is not the live
+  source. Two live sources would muddy the "where do you call it, and why there"
+  answer, so there is exactly one.
+- **The relaxed one:** the Supabase MCP server can no longer be read-only, because
+  the agent deploys the worker and sets its schedule through it.
 
 - **Accounts are required.** Clerk, on **development keys only**; production keys
   need a domain we don't own. A signed-out visitor must reach nobody's data.
