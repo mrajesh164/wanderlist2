@@ -493,7 +493,7 @@ the page needs no join to render a name.
 | --- | --- | --- |
 | `system_slug` | `text not null` | → `bike_systems.slug` |
 | `station_id` | `text not null` | GBFS id, stable across both feed files |
-| `name` | `text not null` | "Pulaski Rd & 60th Pl" |
+| `name` | `text` | "Pulaski Rd & 60th Pl" — **nullable on purpose**, see below |
 | `lat` / `lon` | `double precision` | from `station_information` |
 | `capacity` | `integer` | |
 | `bikes_available` | `integer` | live |
@@ -509,6 +509,18 @@ conflicts on.
 is fetched when a system gains its first follower (and at most hourly after);
 `station_status` is fetched every run. Don't collapse these into one fetch — the
 information file is 1.1 MB and almost never changes.
+
+**`name` is nullable, and that falls straight out of the two clocks.** A station
+can turn up in `station_status` before the next `station_information` fetch has
+given it a name. With `not null` that one upsert fails and takes the entire run
+down with it; nullable means the row lands with live counts and gains its name
+later. Don't "tidy" this to `not null`.
+
+**`station_follows` has deliberately no foreign key to `stations`.** Requiring the
+station row to exist first is a bootstrap deadlock: the worker is what fills
+`stations`, and it only polls systems somebody follows, so the first person to
+follow a station in a new city could never do it. The worker creates the row on
+its next run instead, at most one cron interval later.
 
 #### station_follows — one person's choices, RLS fenced
 
