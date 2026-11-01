@@ -8,8 +8,10 @@ import { Field, TextInput } from "./Field";
 import { useSupabase } from "@/lib/supabase";
 import {
   countsLabel,
+  distanceLabel,
   freshnessLine,
   freshnessOf,
+  metresBetween,
   type BikeSystem,
   type Freshness,
   type Station,
@@ -29,7 +31,7 @@ import {
  */
 
 const SELECT =
-  "system_slug, station_id, name, capacity, bikes_available, ebikes_available, docks_available, last_reported, updated_at";
+  "system_slug, station_id, name, lat, lon, capacity, bikes_available, ebikes_available, docks_available, last_reported, updated_at";
 
 export function StationBoard({ destination }: { destination: string }) {
   const supabase = useSupabase();
@@ -47,6 +49,7 @@ export function StationBoard({ destination }: { destination: string }) {
   const [lastOkRun, setLastOkRun] = useState<WorkerRun | null>(null);
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<Station[]>([]);
+  const [near, setNear] = useState<{ label: string; lat: number; lon: number } | null>(null);
 
   /* Re-renders on a timer so "updated 14 seconds ago" keeps counting and a
      board nobody is touching still slides into `stale` on its own. Without
@@ -69,7 +72,7 @@ export function StationBoard({ destination }: { destination: string }) {
       try {
         const { data, error } = await supabase
           .from("bike_systems")
-          .select("slug, name, city")
+          .select("slug, name, city, lat, lon")
           .ilike("city", destination.trim())
           .maybeSingle();
         if (cancelled) return;
@@ -168,23 +171,92 @@ export function StationBoard({ destination }: { destination: string }) {
     };
   }, [supabase, system, loadRuns]);
 
-  /* Searching the picker hits the database rather than loading 2,078 rows into
-     the browser to filter them there. */
+  /**
+   * Finding stations by *where you're staying*, not by station name.
+   *
+   * Asking for a station name assumed you already knew Divvy's naming, which
+   * nobody visiting a city does. So the typed text goes to the geocoder first
+   * — "Wicker Park", "Logan Square", a hotel's street — and the stations come
+   * back ordered by how far they are from it.
+   *
+   * Street names still work, because the fallback is the old name match. Type
+   * "Clark St" and the geocoder finds nothing useful, so it searches names
+   * instead. One field, both behaviours, no mode switch to explain.
+   */
   useEffect(() => {
-    if (!supabase || !system || query.trim().length < 2) {
+    const q = query.trim();
+    if (!supabase || !system || q.length < 2) {
       setMatches([]);
+      setNear(null);
       return;
     }
     let cancelled = false;
+
     const t = setTimeout(async () => {
+      const centre =
+        system.lat !== null && system.lon !== null
+          ? { lat: system.lat, lon: system.lon }
+          : null;
+
+      /* Geocode first, on the server. Skipped entirely if we have no centre
+         to disambiguate against — a worldwide match would be worse than none. */
+      if (centre) {
+        try {
+          const res = await fetch(
+            `/api/place?q=${encodeURIComponent(q)}&lat=${centre.lat}&lon=${centre.lon}`,
+          );
+          if (cancelled) return;
+          if (res.ok) {
+            const { places } = (await res.json()) as {
+              places: { lat: number; lon: number; label: string }[];
+            };
+            const hit = places[0];
+            /* Guard against a same-named place on another continent winning
+               by default: anything over 60km from the system centre is not
+               the neighbourhood this person meant. */
+            if (hit && metresBetween(centre, hit) < 60_000) {
+              const d = 0.016; // ~1.8km box, trimmed to the nearest few below
+              const { data } = await supabase
+                .from("stations")
+                .select(SELECT)
+                .eq("system_slug", system.slug)
+                .gte("lat", hit.lat - d)
+                .lte("lat", hit.lat + d)
+                .gte("lon", hit.lon - d)
+                .lte("lon", hit.lon + d)
+                .limit(80);
+              if (cancelled) return;
+              const sorted = (data ?? [])
+                .filter((s) => s.lat !== null && s.lon !== null)
+                .sort(
+                  (a, b) =>
+                    metresBetween(hit, { lat: a.lat!, lon: a.lon! }) -
+                    metresBetween(hit, { lat: b.lat!, lon: b.lon! }),
+                )
+                .slice(0, 6);
+              if (sorted.length > 0) {
+                setNear({ label: hit.label, lat: hit.lat, lon: hit.lon });
+                setMatches(sorted);
+                return;
+              }
+            }
+          }
+        } catch {
+          /* Geocoder unreachable is not a dead end — fall through to names. */
+        }
+      }
+
       const { data } = await supabase
         .from("stations")
         .select(SELECT)
         .eq("system_slug", system.slug)
-        .ilike("name", `%${query.trim()}%`)
+        .ilike("name", `%${q}%`)
         .limit(6);
-      if (!cancelled) setMatches(data ?? []);
-    }, 200);
+      if (cancelled) return;
+      setNear(null);
+      setMatches(data ?? []);
+    }, 350);
+
     return () => {
       cancelled = true;
       clearTimeout(t);
@@ -302,13 +374,16 @@ export function StationBoard({ destination }: { destination: string }) {
       )}
 
       <div className="mt-3 max-w-sm">
-        <Field label="Add a station">
+        <Field
+          label="Where are you staying?"
+          hint="A neighbourhood, a street, or a station name."
+        >
           {(props) => (
             <TextInput
               {...props}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Clark St"
+              placeholder="Wicker Park"
             />
           )}
         </Field>
@@ -319,8 +394,22 @@ export function StationBoard({ destination }: { destination: string }) {
           getKey={(s) => s.station_id}
           onPick={(s) => void follow(s)}
         >
-          {(s) => s.name ?? s.station_id}
+          {(s) => (
+            <span className="flex items-baseline justify-between gap-3">
+              <span>{s.name ?? s.station_id}</span>
+              {near && s.lat !== null && s.lon !== null && (
+                <span className="text-muted">
+                  {distanceLabel(metresBetween(near, { lat: s.lat, lon: s.lon }))}
+                </span>
+              )}
+            </span>
+          )}
         </SuggestionList>
+        {near && matches.length > 0 && (
+          <p className="mt-1 text-small text-muted">
+            Nearest {matches.length} to {near.label}
+          </p>
+        )}
       </div>
     </section>
   );

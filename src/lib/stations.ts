@@ -10,6 +10,8 @@ export type Station = {
   system_slug: string;
   station_id: string;
   name: string | null;
+  lat: number | null;
+  lon: number | null;
   capacity: number | null;
   bikes_available: number | null;
   ebikes_available: number | null;
@@ -22,7 +24,35 @@ export type BikeSystem = {
   slug: string;
   name: string;
   city: string;
+  /** Centre of the system, used to disambiguate a place name. */
+  lat: number | null;
+  lon: number | null;
 };
+
+/**
+ * Metres between two points, good enough for "which station is closest".
+ *
+ * Equirectangular rather than haversine on purpose: over the couple of
+ * kilometres a person would walk, the two agree to within a metre or so, and
+ * this is comparing candidates rather than navigating.
+ */
+export function metresBetween(
+  a: { lat: number; lon: number },
+  b: { lat: number; lon: number },
+): number {
+  const R = 6371000;
+  const toRad = Math.PI / 180;
+  const x = (b.lon - a.lon) * toRad * Math.cos(((a.lat + b.lat) / 2) * toRad);
+  const y = (b.lat - a.lat) * toRad;
+  return Math.round(Math.sqrt(x * x + y * y) * R);
+}
+
+/** Rounded, because a walking distance quoted to the metre is false precision. */
+export function distanceLabel(metres: number): string {
+  if (metres < 100) return `${Math.round(metres / 10) * 10} m`;
+  if (metres < 1000) return `${Math.round(metres / 50) * 50} m`;
+  return `${(metres / 1000).toFixed(1)} km`;
+}
 
 export type WorkerRun = {
   started_at: string;
