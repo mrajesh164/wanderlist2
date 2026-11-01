@@ -41,6 +41,7 @@ export function StationBoard({ destination }: { destination: string }) {
 
   const [system, setSystem] = useState<BikeSystem | null>(null);
   const [resolved, setResolved] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
   const [followed, setFollowed] = useState<Station[]>([]);
   const [latestRun, setLatestRun] = useState<WorkerRun | null>(null);
   const [lastOkRun, setLastOkRun] = useState<WorkerRun | null>(null);
@@ -61,14 +62,23 @@ export function StationBoard({ destination }: { destination: string }) {
     if (!supabase) return;
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from("bike_systems")
-        .select("slug, name, city")
-        .ilike("city", destination.trim())
-        .maybeSingle();
-      if (!cancelled) {
+      /* Wrapped because an throw here used to leave `resolved` false forever,
+         and the component rendered nothing at all — no panel, no loading line,
+         no error. A silent null is the worst of the four states because it
+         looks identical to "this feature was never built". */
+      try {
+        const { data, error } = await supabase
+          .from("bike_systems")
+          .select("slug, name, city")
+          .ilike("city", destination.trim())
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) setLookupError(error.message);
         setSystem(data ?? null);
-        setResolved(true);
+      } catch (e) {
+        if (!cancelled) setLookupError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setResolved(true);
       }
     })();
     return () => {
@@ -210,7 +220,29 @@ export function StationBoard({ destination }: { destination: string }) {
       .eq("station_id", station.station_id);
   }
 
-  if (!supabase || !resolved) return null;
+  /* Signed out is the one case that renders nothing, because signed out there
+     is nobody whose stations these would be. Every other case says something. */
+  if (!supabase) return null;
+
+  if (!resolved) {
+    return (
+      <section className="mt-6">
+        <SectionRule />
+        <p className="mt-3 text-small text-muted">Checking for bikes…</p>
+      </section>
+    );
+  }
+
+  if (lookupError) {
+    return (
+      <section className="mt-6">
+        <SectionRule />
+        <p className="mt-3 border-l-[3px] border-error bg-error/10 px-3 py-1.5 text-small text-error">
+          Couldn&rsquo;t check for bikes here. {lookupError}
+        </p>
+      </section>
+    );
+  }
 
   /* Designed absence, not an error and not a blank. A third of the starter
      trips land here — Lisbon has no seeded system — so this is a main path. */
@@ -219,8 +251,8 @@ export function StationBoard({ destination }: { destination: string }) {
       <section className="mt-6">
         <SectionRule />
         <p className="mt-3 text-small text-muted">
-          No bikeshare system here yet. Chicago, New York, Boston, Washington and
-          San Francisco are covered.
+          No bikeshare system in {destination} yet. Chicago, New York, Boston,
+          Washington and San Francisco are covered.
         </p>
       </section>
     );
