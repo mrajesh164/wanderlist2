@@ -616,6 +616,51 @@ changes.
 the pipe is slow, down means it is broken. The runs table is what tells them
 apart, which is the reason it exists.
 
+### Where the live layer lives in the UI
+
+It is not a panel bolted to the bottom of one page. The destination already drives
+the climate strip and the poster; bikes join that, and the trip page grows a
+proper **"what it's like there"** half to sit beside **"what to bring"**.
+
+**It appears on four surfaces, and no fifth tab.** A tab would say this is a new
+place to go. It isn't — it's another thing a trip tells you, the same way the day
+strip is. The four-tab masthead stays as *Shape of the app* describes it.
+
+| Surface | What shows |
+| --- | --- |
+| `/trips/[id]` | The panel itself, in the destination cluster — after `ConditionsNote`, **before** the packing list. Position is what makes it a peer rather than an appendix. |
+| `/` home | The next-departure line gains live counts: *"Chicago, in 3 days — 7 items left · 4 bikes at Clark & Elm"*. The strongest returning-visit hook in the app, because you glance at it on the way out of the door. |
+| `/trips` upcoming | One live count per trip card whose destination has a system. |
+| `/trips/new` | Nothing new. The **destination field is the hook** — it already matches a slug for climate, and the same match finds a `bike_systems` row. No extra input, no new concept. |
+
+**The starters already work, which was checked rather than assumed.** `STARTERS` in
+`lib/starters.ts` carries real destinations — Chicago, Lisbon, New York — so
+"A weekend at home" lands on Divvy and "Three days for a conference" lands on Citi
+Bike. A brand-new account taps a starter and gets live data on its first screen,
+with nothing added. Don't "fix" the starters for this; they were already right.
+
+**Lisbon is the interesting one, and it is not a bug.** There is no seeded system
+for it, so the panel must have a designed absence: a quiet line saying this
+destination has no bikeshare, not an error, not a spinner, and not a blank space
+where a panel should be. That is the brief's *nothing found* state, and it will be
+the state a third of the starter trips land in — so it gets designed first, not
+last.
+
+**Following stations uses components that already exist.** The nearby stations
+render as a `SuggestionList`, and the ones you follow become `Chip`s. No one-off
+controls — the grep in *Requirements this app is graded on* must keep coming back
+clean.
+
+**The freshness line sits above the panel, once.** Not a badge per row. Four
+states as specified above, and *stale* and *down* must not look alike. Per the
+design system an error is a rule, an icon and a tint — never an accent-coloured
+button, and the accent still belongs to the primary action alone.
+
+**When a row changes, tint it briefly and let it fade.** `selected` (`#EDD8CC`),
+no glow and no animation beyond the fade — this is the one moment the live layer
+is visible as *live*, and it has to stay inside a design system whose border
+radius is zero.
+
 ### Repo layout — one repo, two runtimes
 
 No workspaces, no `apps/` restructure. `supabase/` already sits beside `src/`:
