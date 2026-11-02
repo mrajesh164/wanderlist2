@@ -181,11 +181,15 @@ function DayRow({
         <Label>
           {weekday} {day.date.getDate()}
         </Label>
-        <p className="mt-1 text-body text-ink">
+        {/* Three weights, not three shades. The note was muted at small size
+            and sat on top of a muted tip, which made the whole block grey.
+            The note is what the place *is*, so it reads in ink; only the tip
+            recedes. */}
+        <p className="mt-1 text-body font-semibold text-ink">
           {day.place.title}
-          <span className="text-muted"> · {day.place.area}</span>
+          <span className="font-normal text-muted"> · {day.place.area}</span>
         </p>
-        <p className="measure mt-0.5 text-small text-muted">{day.place.note}</p>
+        <p className="measure mt-1 text-body text-ink">{day.place.note}</p>
         <p className="measure mt-1 text-small italic text-muted">
           {day.place.tip}
         </p>

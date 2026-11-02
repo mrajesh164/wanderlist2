@@ -117,7 +117,7 @@ const CONTROL =
 export function TextInput({
   className = "",
   ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
+}: React.ComponentPropsWithRef<"input">) {
   return <input className={`${CONTROL} ${className}`} {...props} />;
 }
 

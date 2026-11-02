@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "./Button";
 import { Field, Select, TextInput, focusFirstError } from "./Field";
 import { Label } from "./Card";
@@ -46,7 +46,6 @@ export function AddItemForm({
   inventoryOptions = [],
   onAdd,
   onBump,
-  jumpTo,
 }: {
   /** The list as it stands — needed whole, not as labels, so a repeat can add
       to the row that's already there. */
@@ -58,9 +57,6 @@ export function AddItemForm({
   onAdd: (item: Item) => void;
   /** One more of something the list already has. */
   onBump: (item: Item) => void;
-  /** Set by a category's "+ Add": preselect it, then focus and scroll here.
-   *  `nonce` exists so tapping the same category twice still moves focus. */
-  jumpTo?: { category: string; nonce: number };
 }) {
   const [label, setLabel] = useState("");
   const [category, setCategory] = useState<string>("Extras");
@@ -74,17 +70,6 @@ export function AddItemForm({
   const [browsing, setBrowsing] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  /* Jumping rather than rendering a form per section. Eight inline forms is
-     eight sets of state and eight tab stops through a list someone is trying
-     to read; one form that comes to you keeps the page quiet. */
-  useEffect(() => {
-    if (!jumpTo) return;
-    setCategory(jumpTo.category);
-    const form = formRef.current;
-    if (!form) return;
-    form.scrollIntoView({ block: "center", behavior: "smooth" });
-    form.querySelector<HTMLInputElement>("input")?.focus();
-  }, [jumpTo]);
 
   const extras = (existingCategories ?? []).filter(
     (c) => !CATEGORY_ORDER.includes(c),

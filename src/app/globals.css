@@ -11,16 +11,16 @@
 
 @theme {
   /* --- color roles --- */
-  --color-background: #e8dcc5; /* the page itself */
-  --color-surface: #fbf7f0; /* cards, inputs, panels — lifted from
+  --color-background: #ded0b2; /* the page — deepened from #e8dcc5 */
+  --color-surface: #fdfbf7; /* cards, inputs, panels */
                                #f6efe3, which sat at 1.19:1 against
                                the page and read as flat beige */
-  --color-surface-raised: #eae2d7; /* hover fill on quiet controls */
-  --color-selected: #edd8cc; /* chosen rows and chips */
+  --color-surface-raised: #efe9dc; /* hover fill on quiet controls */
+  --color-selected: #f0dbcb; /* chosen rows and chips */
   --color-ink: #2b1d16; /* headings and body */
-  --color-muted: #685c54; /* captions, meta, placeholders */
-  --color-rule: #c3bab0; /* dividers and plate rules */
-  --color-rule-strong: #83796f; /* input and control edges */
+  --color-muted: #615549; /* captions, meta — darkened with the page */
+  --color-rule: #b3a99d; /* dividers and plate rules */
+  --color-rule-strong: #786d62; /* control edges — keeps 3:1 on the page */
   --color-accent: #ae3220; /* primary action ONLY */
   --color-success: #41662f; /* confirmation */
   --color-error: #7b1e2b; /* failure and destructive */

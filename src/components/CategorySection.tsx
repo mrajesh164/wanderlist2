@@ -26,6 +26,8 @@ export function CategorySection({
   onQty,
   onRemove,
   onAddHere,
+  adding,
+  addForm,
 }: {
   category: ItemCategory;
   items: Item[];
@@ -36,6 +38,11 @@ export function CategorySection({
   onRemove: (itemId: string) => void;
   /** Add something to *this* category without hunting for the form. */
   onAddHere?: () => void;
+  /** True when this is the section whose inline form is open. */
+  adding?: boolean;
+  /** The form itself, built by the page so the add/bump logic stays in one
+   *  place rather than being handed down through every section. */
+  addForm?: React.ReactNode;
 }) {
   if (items.length === 0) return null;
 
@@ -72,10 +79,14 @@ export function CategorySection({
                the bottom of a long list and then picking the category again. */
             <QuietAction
               onClick={onAddHere}
-              label={`Add something to ${category}`}
+              label={
+                adding
+                  ? `Close the add box for ${category}`
+                  : `Add something to ${category}`
+              }
               className="opacity-100 hover:text-ink"
             >
-              <span style={{ color: style.hue }}>+ Add</span>
+              <span style={{ color: style.hue }}>{adding ? "Close" : "+ Add"}</span>
             </QuietAction>
           )}
           {done && (
@@ -89,6 +100,8 @@ export function CategorySection({
           <PackCount packed={packed} total={items.length} />
         </span>
       </div>
+
+      {adding && addForm}
 
       <ul className="px-2.5">
         {items.map((item) => (
