@@ -111,3 +111,25 @@ export const PLACES: Record<string, Place[]> = {
 export function placesFor(citySlug: string | null | undefined): Place[] {
   return (citySlug && PLACES[citySlug]) || [];
 }
+
+/**
+ * A typed destination to a curated-places slug.
+ *
+ * Deliberately the same slug space as `bike_systems`, so one lookup serves
+ * both: `chi` has places *and* live bikes, `lis` has places and no bikes, and
+ * a station query for `lis` simply returns nothing. That is the correct
+ * behaviour rather than a special case to code around.
+ */
+const BY_DESTINATION: Record<string, string> = {
+  chicago: "chi",
+  "new york": "nyc",
+  "new york city": "nyc",
+  nyc: "nyc",
+  lisbon: "lis",
+  lisboa: "lis",
+};
+
+export function citySlugFor(destination: string | null | undefined): string | null {
+  if (!destination) return null;
+  return BY_DESTINATION[destination.trim().toLowerCase()] ?? null;
+}

@@ -28,6 +28,9 @@ import {
 import { categoriesPresent, type Item } from "@/lib/types";
 import { buildInventory, ownedCounts, shortfall } from "@/lib/inventory";
 import { StationBoard } from "@/components/StationBoard";
+import { DayPlan } from "@/components/DayPlan";
+import { citySlugFor } from "@/lib/places";
+import { tripDays } from "@/lib/trip-days";
 
 /**
  * The checklist. The core task, and the screen this app exists for.
@@ -218,6 +221,17 @@ function Checklist() {
           live={live}
           startDate={trip.startDate}
           endDate={trip.endDate}
+        />
+      )}
+
+      {/* Where you'll be each day, built from the same per-day normals the
+          strip above draws. Sits before the bikes panel because the plan is
+          what the bikes are *for* — "how do I get to Tuesday" only means
+          something once Tuesday has somewhere to be. */}
+      {live.state === "ok" && (
+        <DayPlan
+          citySlug={citySlugFor(trip.destination)}
+          days={tripDays(trip.startDate, trip.endDate, live.byMonth)}
         />
       )}
 
