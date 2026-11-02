@@ -139,11 +139,21 @@ export function freshnessLine(
   }
 }
 
-/** Ebikes are a subset of bikes, never a separate pool — don't add them. */
+/**
+ * Ebikes are a subset of bikes, never a separate pool — don't add them.
+ *
+ * Both numbers are shown because a stand can fail you in either direction:
+ * no bikes and you cannot start there, no empty docks and you cannot finish
+ * there. "Docks" alone doesn't say which it means, so the label spells it out
+ * and the section header explains it once.
+ */
 export function countsLabel(s: Station): string {
   if (s.bikes_available === null) return "—";
   const bikes = `${s.bikes_available} bike${s.bikes_available === 1 ? "" : "s"}`;
-  const docks =
-    s.docks_available === null ? null : `${s.docks_available} docks`;
-  return docks ? `${bikes} · ${docks}` : bikes;
+  if (s.docks_available === null) return bikes;
+  return `${bikes} · ${s.docks_available} space${s.docks_available === 1 ? "" : "s"}`;
 }
+
+/** Said once per section, because neither number is guessable. */
+export const COUNTS_EXPLAINER =
+  "Bikes you could take now, and empty spaces to return one to.";

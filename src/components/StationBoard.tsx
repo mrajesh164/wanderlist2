@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession, useUser } from "@clerk/nextjs";
 import { Label, SectionRule } from "./Card";
-import { Chip, QuietAction, SuggestionList } from "./Controls";
+import { QuietAction, SuggestionList } from "./Controls";
 import { Field, TextInput } from "./Field";
 import { useSupabase } from "@/lib/supabase";
 import {
   countsLabel,
+  COUNTS_EXPLAINER,
   distanceLabel,
   freshnessLine,
   freshnessOf,
@@ -131,6 +132,11 @@ export function StationBoard({ destination }: { destination: string }) {
   }, [supabase]);
 
   useEffect(() => {
+    /* Both are async and only setState after their await, so this is not the
+       cascading render the rule is looking for — it cannot see through the
+       useCallback to tell. They stay callbacks because follow/unfollow and
+       the Realtime handler call them too. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadFollowed();
     void loadRuns();
   }, [loadFollowed, loadRuns]);
@@ -227,6 +233,10 @@ export function StationBoard({ destination }: { destination: string }) {
   useEffect(() => {
     const q = query.trim();
     if (!supabase || !system || q.length < 2) {
+      /* Clearing on a shortened query is the correct behaviour, not a
+         cascading render: stale suggestions under an emptied box would be
+         worse than the extra pass. */
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMatches([]);
       setNear(null);
       return;
@@ -383,28 +393,21 @@ export function StationBoard({ destination }: { destination: string }) {
   return (
     <section className="mt-6">
       <SectionRule />
-      {/* Folded away by default. Each planned day already shows the dock next
-          to it, which is the answer most people want; this is the longer
-          version for a hotel that isn't on the itinerary. Three stacked
-          destination panels above a packing list was too much page before you
-          reached what the app is for.
-
-          A <details> rather than a custom toggle: it is keyboard-operable and
-          screen-reader-labelled for free, and <summary> is not one of the raw
-          controls the component rule forbids. */}
-      <details className="group mt-3">
-        <summary className="cursor-pointer list-none">
-          <span className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <Label>
-              <span className="underline decoration-rule-strong underline-offset-4">
-                Follow other stations in {system.city}
-              </span>
-            </Label>
-            <Label>{system.name}</Label>
-          </span>
-        </summary>
+      {/* This is the live half of the assignment, so it gets a heading rather
+          than hiding behind 11px of label text. I folded the whole section
+          away to calm the page down and buried the one thing that is actually
+          updating itself — wrong trade. The page is calmed by folding the
+          *search* instead, below: that is the occasional control, this is the
+          thing worth looking at. */}
+      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 className="font-display text-[22px] font-semibold leading-tight text-ink">
+          Live bikes in {system.city}
+        </h2>
+        <Label>{system.name} · updating itself</Label>
+      </div>
 
       <FreshnessLine state={state} line={freshnessLine(state, lastOkRun)} />
+      <p className="mt-1 text-small text-muted">{COUNTS_EXPLAINER}</p>
 
       {followed.length > 0 ? (
         <ul className="mt-3 border border-rule-strong bg-surface shadow-raised">
@@ -437,7 +440,15 @@ export function StationBoard({ destination }: { destination: string }) {
         </p>
       )}
 
-      <div className="mt-3 max-w-sm">
+      <details className="mt-4">
+        <summary className="cursor-pointer list-none">
+          <Label>
+            <span className="underline decoration-rule-strong underline-offset-4">
+              + Follow another station
+            </span>
+          </Label>
+        </summary>
+        <div className="mt-2 max-w-sm">
         <Field
           label="Where are you staying?"
           hint="A neighbourhood, a street, or a station name."
@@ -472,7 +483,7 @@ export function StationBoard({ destination }: { destination: string }) {
             Nearest {unfollowedMatches.length} to {near.label}
           </p>
         )}
-      </div>
+        </div>
       </details>
     </section>
   );

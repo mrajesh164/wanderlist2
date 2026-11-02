@@ -7,6 +7,7 @@ import { useSupabase } from "@/lib/supabase";
 import { buildItinerary, reasonLine, type PlannedDay } from "@/lib/itinerary";
 import {
   countsLabel,
+  COUNTS_EXPLAINER,
   distanceLabel,
   metresBetween,
   type Station,
@@ -233,6 +234,7 @@ export function DayPlan({
         <Label>Your days</Label>
         <Label>Built from the forecast</Label>
       </div>
+      <p className="mt-1 text-small text-muted">{COUNTS_EXPLAINER}</p>
 
       <ol className="mt-3 border border-rule-strong bg-surface shadow-raised">
         {plan.map((day) => (
