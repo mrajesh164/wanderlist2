@@ -47,9 +47,18 @@ export function metresBetween(
   return Math.round(Math.sqrt(x * x + y * y) * R);
 }
 
-/** Rounded, because a walking distance quoted to the metre is false precision. */
+/**
+ * Rounded, because a walking distance quoted to the metre is false precision —
+ * but not so rounded that two different stations read the same.
+ *
+ * The first version bucketed to 50m above 100m, which turned a genuine 144m
+ * and 171m into "150 m" and "150 m". Two rows claiming the same distance in a
+ * list *sorted by distance* reads as a bug, and it loses the one thing the
+ * number is for: choosing between them. Ten-metre buckets are still coarser
+ * than the station coordinates are accurate, and they keep neighbours apart.
+ */
 export function distanceLabel(metres: number): string {
-  if (metres < 100) return `${Math.round(metres / 10) * 10} m`;
+  if (metres < 500) return `${Math.round(metres / 10) * 10} m`;
   if (metres < 1000) return `${Math.round(metres / 50) * 50} m`;
   return `${(metres / 1000).toFixed(1)} km`;
 }
