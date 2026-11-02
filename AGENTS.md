@@ -706,6 +706,46 @@ asks. One tap is the ask, and counts arrive within one cron interval. It also
 inverts the discovery problem: you follow the dock *by Tuesday's plan* rather
 than hunting a station name you were never going to know.
 
+### How the trip page is organised, after the Assignment 4 feedback
+
+Four blocks, one frame. `components/TripSection.tsx` supplies a 2px rule, a
+display title, a muted line on the right, and a `<details>` body: **Weather**,
+**Your days**, **Live bikes**, **Packing list**, in that order.
+
+**It wasn't always.** Each block grew its own header — outlined badges, a label
+pair, a display heading, a bare rule — and four styles of heading is most of
+why a page of perfectly reasonable sections read as scattered. If you add a
+fifth block, use `TripSection`; don't invent a fifth header.
+
+**Open by default, and leave it that way.** Collapsing is for someone who knows
+what a section holds, not a way to hide things from someone who doesn't. A trip
+page that greets you folded shut is worse than a long one.
+
+**Don't fold the live section away.** It was, briefly, behind a small label —
+and that buried the one part of the app that is actually updating itself. The
+*search* folds; the counts don't. If the page feels long again, fold a control,
+not the evidence.
+
+**`<details>` rather than a custom toggle**, here and in the station search:
+keyboard operation and open state come free, and `<summary>` is not one of the
+raw controls the component grep forbids. That grep must stay clean.
+
+**Two forms add an item, on purpose.** `AddItemForm` at the foot of the list is
+the one that can invent a new category and the one you use when you don't know
+where a thing belongs. `InlineAddItem` opens inside a section header's **+ Add**
+and has no category picker at all — the section is the answer, and a select with
+one possible value is a question not worth asking. The first attempt scrolled
+you to the bottom form instead, which is not what "without scrolling" means.
+
+Both share the repeat rule: a label already on the list adds one to the existing
+row and says which section it is in. Asking for a second pair of socks must not
+depend on which box you typed into.
+
+**The forward action ends the row.** "Delete trip" used to hold the rightmost
+slot on the trip page — the end of the left-to-right progression, which reads as
+*continue* — while "Done" sat bottom-left. Destructive work goes left, behind
+its confirm; the primary action finishes the row.
+
 ### Repo layout — one repo, two runtimes
 
 No workspaces, no `apps/` restructure. `supabase/` already sits beside `src/`:
