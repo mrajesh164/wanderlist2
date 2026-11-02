@@ -3,6 +3,7 @@
 import { ItemRow } from "./ItemRow";
 import { PackCount } from "./PackProgress";
 import { styleFor } from "./categoryStyle";
+import { QuietAction } from "./Controls";
 import type { Item, ItemCategory } from "@/lib/types";
 
 /**
@@ -24,6 +25,7 @@ export function CategorySection({
   onToggle,
   onQty,
   onRemove,
+  onAddHere,
 }: {
   category: ItemCategory;
   items: Item[];
@@ -32,6 +34,8 @@ export function CategorySection({
   onToggle: (itemId: string) => void;
   onQty: (itemId: string, qty: number) => void;
   onRemove: (itemId: string) => void;
+  /** Add something to *this* category without hunting for the form. */
+  onAddHere?: () => void;
 }) {
   if (items.length === 0) return null;
 
@@ -60,7 +64,20 @@ export function CategorySection({
           {category}
         </h3>
 
-        <span className="flex items-baseline gap-2">
+        <span className="flex items-baseline gap-3">
+          {onAddHere && (
+            /* Always visible, unlike the row-level QuietActions that reveal on
+               hover: this is an invitation, not a destructive afterthought.
+               The feedback was that adding to a category meant scrolling to
+               the bottom of a long list and then picking the category again. */
+            <QuietAction
+              onClick={onAddHere}
+              label={`Add something to ${category}`}
+              className="opacity-100 hover:text-ink"
+            >
+              <span style={{ color: style.hue }}>+ Add</span>
+            </QuietAction>
+          )}
           {done && (
             <span
               className="font-sans text-label uppercase"

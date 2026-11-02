@@ -110,6 +110,13 @@ function Checklist() {
   }
 
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  /* Which category the add form should open on, set by a section's "+ Add".
+     The nonce is what makes tapping the same category twice move focus again;
+     without it the effect sees identical props and does nothing. */
+  const [jumpTo, setJumpTo] =
+    useState<{ category: string; nonce: number } | undefined>(undefined);
+  const jumpNonce = useRef(0);
   const confirmRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (confirmingDelete) confirmRef.current?.focus();
@@ -312,6 +319,9 @@ function Checklist() {
             onToggle={(itemId) => toggleItem(trip.id, itemId)}
             onQty={(itemId, qty) => setItemQty(trip.id, itemId, qty)}
             onRemove={(itemId) => removeItem(trip.id, itemId)}
+            onAddHere={() =>
+              setJumpTo({ category, nonce: jumpNonce.current++ })
+            }
           />
         ))}
 
@@ -337,6 +347,7 @@ function Checklist() {
             trip.items.map((i) => i.category),
           )}
           inventoryOptions={inventoryOptions}
+          jumpTo={jumpTo}
           onAdd={(item) => addItem(trip.id, item)}
           /* Same thing the row's own stepper does — which is the point: asking
              for a second T-shirt should not depend on which control you reach
