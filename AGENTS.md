@@ -616,6 +616,36 @@ changes.
 the pipe is slow, down means it is broken. The runs table is what tells them
 apart, which is the reason it exists.
 
+**All four states have been watched, not just written.** The stale and down
+paths are the easiest thing in this feature to ship untested, because the happy
+path looks identical whether or not they work.
+
+| State | How it was produced | What was observed |
+| --- | --- | --- |
+| Fresh | normal operation | last good run 19s old |
+| Stale | `cron.unschedule('poll-stations')`, wait | 109s since the last good run, state computed as `stale` |
+| Down | pointed `bike_systems.status_url` at a path that 404s, invoked the worker | worker returned HTTP 500, recorded `ok = false` with the real error text, state computed as `down` |
+| Fresh again | URL restored, cron rescheduled | good run within 19s |
+
+**The down state was produced by a real failure rather than a hand-written row.**
+A faked `worker_runs` insert proves the rendering and nothing else; breaking the
+feed proves the worker catches a failure, records it with its message, and that
+the page reads that record. The error it stored was
+
+```
+https://gbfs.divvybikes.com/gbfs/en/station_status_BROKEN_ON_PURPOSE.json returned 403
+```
+
+To do it again: `select cron.unschedule('poll-stations');` and wait 60s for
+stale; break the URL and POST the function for down. **Put both back** —
+`cron.schedule` with the body from
+`supabase/migrations/20261101223000_schedule_poll_stations.sql`, and the real
+`station_status.json` URL from `20261101214500_bike_systems_and_stations.sql`.
+
+One thing worth knowing if you try it: `update cron.job set active = false` is
+refused with `42501` — the table isn't writable directly, and `cron.unschedule`
+is the supported way.
+
 ### Where the live layer lives in the UI
 
 It is not a panel bolted to the bottom of one page. The destination already drives
