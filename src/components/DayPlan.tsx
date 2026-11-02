@@ -125,7 +125,7 @@ export function DayPlan({
         <Label>Built from the forecast</Label>
       </div>
 
-      <ol className="mt-3 border border-rule">
+      <ol className="mt-3 border border-rule bg-surface">
         {plan.map((day) => (
           <li
             key={day.date.toISOString()}

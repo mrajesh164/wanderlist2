@@ -346,24 +346,15 @@ function Checklist() {
       </div>
 
       {/* --- housekeeping ---
-          One row of matching secondary buttons rather than a line of underlined
-          links at different weights, which read as unrelated bits of text. The
-          destructive action sits apart, on the right. */}
+          Order matters here and it was wrong. "Delete trip" sat in the
+          rightmost slot — the end of the left-to-right progression, which
+          reads as *continue* — while "Done", the actual forward action, was
+          bottom-left. Destructive work now sits on the left, apart and
+          behind a confirm; the forward action ends the row, where the eye
+          finishes. */}
       <div className="mt-10 border-t border-rule pt-4">
         <div className="flex flex-wrap items-start gap-3">
-          <ButtonLink href="/trips" variant="primary">
-            Done
-          </ButtonLink>
-
-          {phase !== "past" && <EditDates trip={trip} />}
-
-          {phase !== "past" && !allPacked && (
-            <Button variant="secondary" onClick={finish}>
-              Mark this trip finished
-            </Button>
-          )}
-
-          <span className="ml-auto">
+          <span>
             {confirmingDelete ? (
               <span className="flex flex-wrap items-center gap-3">
                 <span className="text-small text-ink">Delete this trip?</span>
@@ -389,6 +380,20 @@ function Checklist() {
                 Delete trip
               </Button>
             )}
+          </span>
+
+          {phase !== "past" && <EditDates trip={trip} />}
+
+          {phase !== "past" && !allPacked && (
+            <Button variant="secondary" onClick={finish}>
+              Mark this trip finished
+            </Button>
+          )}
+
+          <span className="ml-auto">
+            <ButtonLink href="/trips" variant="primary">
+              Done
+            </ButtonLink>
           </span>
         </div>
       </div>

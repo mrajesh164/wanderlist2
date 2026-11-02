@@ -383,15 +383,31 @@ export function StationBoard({ destination }: { destination: string }) {
   return (
     <section className="mt-6">
       <SectionRule />
-      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <Label>Getting around in {system.city}</Label>
-        <Label>{system.name}</Label>
-      </div>
+      {/* Folded away by default. Each planned day already shows the dock next
+          to it, which is the answer most people want; this is the longer
+          version for a hotel that isn't on the itinerary. Three stacked
+          destination panels above a packing list was too much page before you
+          reached what the app is for.
+
+          A <details> rather than a custom toggle: it is keyboard-operable and
+          screen-reader-labelled for free, and <summary> is not one of the raw
+          controls the component rule forbids. */}
+      <details className="group mt-3">
+        <summary className="cursor-pointer list-none">
+          <span className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <Label>
+              <span className="underline decoration-rule-strong underline-offset-4">
+                Follow other stations in {system.city}
+              </span>
+            </Label>
+            <Label>{system.name}</Label>
+          </span>
+        </summary>
 
       <FreshnessLine state={state} line={freshnessLine(state, lastOkRun)} />
 
       {followed.length > 0 ? (
-        <ul className="mt-3 border border-rule">
+        <ul className="mt-3 border border-rule bg-surface">
           {followed.map((s) => (
             <li
               key={s.station_id}
@@ -457,6 +473,7 @@ export function StationBoard({ destination }: { destination: string }) {
           </p>
         )}
       </div>
+      </details>
     </section>
   );
 }
