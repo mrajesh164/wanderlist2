@@ -407,7 +407,7 @@ export function StationBoard({ destination }: { destination: string }) {
       <FreshnessLine state={state} line={freshnessLine(state, lastOkRun)} />
 
       {followed.length > 0 ? (
-        <ul className="mt-3 border border-rule bg-surface">
+        <ul className="mt-3 border border-rule-strong bg-surface shadow-raised">
           {followed.map((s) => (
             <li
               key={s.station_id}

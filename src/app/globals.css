@@ -12,7 +12,9 @@
 @theme {
   /* --- color roles --- */
   --color-background: #e8dcc5; /* the page itself */
-  --color-surface: #f6efe3; /* cards, inputs, panels */
+  --color-surface: #fbf7f0; /* cards, inputs, panels — lifted from
+                               #f6efe3, which sat at 1.19:1 against
+                               the page and read as flat beige */
   --color-surface-raised: #eae2d7; /* hover fill on quiet controls */
   --color-selected: #edd8cc; /* chosen rows and chips */
   --color-ink: #2b1d16; /* headings and body */

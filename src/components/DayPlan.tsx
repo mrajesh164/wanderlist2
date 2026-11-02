@@ -125,7 +125,7 @@ export function DayPlan({
         <Label>Built from the forecast</Label>
       </div>
 
-      <ol className="mt-3 border border-rule bg-surface">
+      <ol className="mt-3 border border-rule-strong bg-surface shadow-raised">
         {plan.map((day) => (
           <li
             key={day.date.toISOString()}
@@ -169,40 +169,55 @@ function DayRow({
     .filter((x) => x.metres <= NEAR_METRES)
     .sort((a, b) => a.metres - b.metres)[0];
 
+  /* Weekday and date built separately rather than from one toLocaleDateString
+     call, which put the number first — "1 Sun" reads as a list index followed
+     by a day. This matches the conditions strip directly above, which already
+     labels its cells SUN 1. */
+  const weekday = day.date.toLocaleDateString(undefined, { weekday: "short" });
+
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-      <span className="flex min-w-0 flex-col">
-        <span className="text-ink">
-          <span className="font-semibold">
-            {day.date.toLocaleDateString(undefined, {
-              weekday: "short",
-              day: "numeric",
-            })}
-          </span>{" "}
-          · {day.place.title}
-        </span>
-        <span className="text-small text-muted">
-          {day.place.area}
-          {why && ` · ${why}`}
-        </span>
+    <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
+      <span className="min-w-0 flex-1">
+        <Label>
+          {weekday} {day.date.getDate()}
+        </Label>
+        <p className="mt-1 text-body text-ink">
+          {day.place.title}
+          <span className="text-muted"> · {day.place.area}</span>
+        </p>
+        <p className="measure mt-0.5 text-small text-muted">{day.place.note}</p>
+        <p className="measure mt-1 text-small italic text-muted">
+          {day.place.tip}
+        </p>
+        {why && (
+          <p className="mt-1 text-small text-warning">{why}</p>
+        )}
       </span>
 
       {nearest && (
-        <span className="flex items-baseline gap-3 text-small">
-          <span className="text-muted">
-            {nearest.station.name ?? "Nearest dock"} ·{" "}
+        /* Labelled, because an unexplained street name and a distance on the
+           right of a row is a riddle. The label says what it is; the line
+           below says where and how far; the action says what you can do. */
+        <span className="shrink-0 text-right">
+          <Label>Nearest bikes</Label>
+          <p className="mt-1 text-small text-ink">
+            {nearest.station.name ?? "Dock"}
+          </p>
+          <p className="text-small text-muted">
             {distanceLabel(nearest.metres)}
-          </span>
-          {followed.has(nearest.station.station_id) ? (
-            <span className="text-ink">{countsLabel(nearest.station)}</span>
-          ) : (
-            <QuietAction
-              onClick={() => onWatch(nearest.station)}
-              label={`Watch ${nearest.station.name ?? "this dock"}`}
-            >
-              Watch
-            </QuietAction>
-          )}
+            {" · "}
+            {followed.has(nearest.station.station_id) ? (
+              <span className="text-ink">{countsLabel(nearest.station)}</span>
+            ) : (
+              <QuietAction
+                onClick={() => onWatch(nearest.station)}
+                label={`Watch ${nearest.station.name ?? "this dock"} for live bikes`}
+                className="opacity-100 underline decoration-rule-strong underline-offset-2 hover:text-ink"
+              >
+                Watch
+              </QuietAction>
+            )}
+          </p>
         </span>
       )}
     </div>
