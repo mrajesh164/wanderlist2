@@ -51,6 +51,7 @@ export function DayPlan({
   const [stations, setStations] = useState<Station[]>([]);
   const [followed, setFollowed] = useState<Set<string>>(new Set());
   const [reloadTick, setReloadTick] = useState(0);
+  const [seeding, setSeeding] = useState(false);
 
   /* Memoised on the dates rather than the array, which is rebuilt on every
      render: without this the plan is a new object each time and every effect
@@ -109,7 +110,7 @@ export function DayPlan({
     };
     /* Keyed on the places rather than the array identity, which is rebuilt
        on every render because the plan is derived rather than stored. */
-  }, [supabase, citySlug, plan]);
+  }, [supabase, citySlug, plan, reloadTick]);
 
   /**
    * Keep the day rows live too.
@@ -188,6 +189,51 @@ export function DayPlan({
       cancelled = true;
     };
   }, [supabase, citySlug, reloadTick]);
+
+  /**
+   * Seed a city's stations the first time anybody needs them.
+   *
+   * The worker's seed path existed from the start but had to be invoked by
+   * hand, and I only ever ran it for Chicago. So the first New York trip
+   * found a system, found no stations, and showed an empty bikes section
+   * with no explanation — the feature looked broken when it was only
+   * unseeded.
+   *
+   * A city with a system but zero rows is now self-healing: the page asks
+   * the worker to load it, once. The guard is `loaded.length === 0`, so this
+   * costs one extra query per visit and fires at most once per city, ever.
+   */
+  useEffect(() => {
+    if (!supabase || !citySlug || seeding) return;
+    if (stations.length > 0) return;
+    let cancelled = false;
+
+    (async () => {
+      const { count } = await supabase
+        .from("stations")
+        .select("station_id", { count: "exact", head: true })
+        .eq("system_slug", citySlug);
+      if (cancelled || (count ?? 0) > 0) return;
+
+      setSeeding(true);
+      /* Through our own route, not supabase.functions.invoke: the Functions
+         gateway only accepts a JWT signed by the project, and this client
+         carries a Clerk token, so invoking from here returns 401 and the
+         seed silently never happens. Measured: anon 200, none 401, bad 401. */
+      await fetch("/api/seed-city", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: citySlug }),
+      }).catch(() => {});
+      if (!cancelled) {
+        setSeeding(false);
+        setReloadTick((n) => n + 1);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, citySlug, stations.length, seeding]);
 
   /**
    * Register the docks this itinerary needs, without asking.
