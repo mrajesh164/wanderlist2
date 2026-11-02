@@ -891,14 +891,14 @@ Colors, declared as tokens in `globals.css`:
 
 | Token | Hex | Use |
 |---|---|---|
-| `background` | `#E8DCC5` | the page |
-| `surface` | `#F6EFE3` | cards, inputs, panels |
-| `surface-raised` | `#EAE2D7` | hover fill on quiet controls |
-| `selected` | `#EDD8CC` | chosen rows and chips |
+| `background` | `#DED0B2` | the page — **deepened from `#E8DCC5`** |
+| `surface` | `#FDFBF7` | cards, inputs, panels — lifted with the page |
+| `surface-raised` | `#EFE9DC` | hover fill on quiet controls |
+| `selected` | `#F0DBCB` | chosen rows and chips |
 | `ink` | `#2B1D16` | headings and body |
-| `muted` | `#685C54` | captions, meta, placeholders |
-| `rule` | `#C3BAB0` | dividers and plate rules |
-| `rule-strong` | `#83796F` | input and control edges (darkened from `#90867C` to clear 3:1 against the page) |
+| `muted` | `#615549` | captions, meta, placeholders — darkened with the page |
+| `rule` | `#B3A99D` | dividers and plate rules |
+| `rule-strong` | `#786D62` | input and control edges — darkened twice now, each time to keep 3:1 against a deepening page |
 | `accent` | `#AE3220` | primary action only |
 | `success` | `#41662F` | confirmation |
 | `error` | `#7B1E2B` | failure and destructive |
@@ -915,6 +915,33 @@ Shape and rules — these are what make it look printed, so hold the line:
   rule on a selected tab.
 - Focus outline 2px, offset 2px — tomato on quiet controls, espresso on accent fill.
 - Spacing is a 4px scale: 4, 8, 12, 16, 24, 32, 48, 64.
+
+
+**The palette was re-balanced after Assignment 4 feedback, and the numbers are
+the reason.** The note was that the interface suffered from beige-on-beige, and
+it did: `surface` sat at **1.19:1** against `background`, so a card and the page
+it lay on were nearly the same value and every panel read flat.
+
+The first attempt was to lift `surface` alone, which caps at 1.27 — not enough.
+Deepening the page is what works, and the cost is that it drags the two tokens
+measured against the page below their floors. So they move too:
+
+| Pair | Before | After | Floor |
+| --- | --- | --- | --- |
+| `surface` on `background` | 1.19 | **1.48** | — |
+| `muted` on `background` | 4.77 | **4.74** | 4.5 |
+| `muted` on `surface` | 5.66 | **7.00** | 4.5 |
+| `rule-strong` on `background` | 3.14 | **3.31** | 3.0 |
+| `ink` on `background` | 12.0 | **10.7** | 4.5 |
+
+**If you deepen the page again, re-check those four.** `rule-strong` exists to
+clear 3:1 and has now been darkened twice for exactly this reason.
+
+**Colour is not the only lever, and it isn't the strongest one here.** A
+two-tone parchment palette can only separate so far before it stops being
+parchment. Depth does the rest: panels carry `shadow-raised` — hard offset, no
+blur, as the shape rules require — which is how `/trips` already distinguished
+its board. Reach for the shadow before reaching for more contrast.
 
 **Category colours** live in `src/components/categoryStyle.ts` — one muted pigment
 per packing category (slate, rust, olive, leather, pine, graphite, ochre). They're
