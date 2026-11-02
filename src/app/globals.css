@@ -13,8 +13,6 @@
   /* --- color roles --- */
   --color-background: #ded0b2; /* the page — deepened from #e8dcc5 */
   --color-surface: #fdfbf7; /* cards, inputs, panels */
-                               #f6efe3, which sat at 1.19:1 against
-                               the page and read as flat beige */
   --color-surface-raised: #efe9dc; /* hover fill on quiet controls */
   --color-selected: #f0dbcb; /* chosen rows and chips */
   --color-ink: #2b1d16; /* headings and body */
