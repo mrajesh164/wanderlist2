@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession, useUser } from "@clerk/nextjs";
-import { Label, SectionRule } from "./Card";
+import { Label } from "./Card";
+import { TripSection } from "./TripSection";
 import { QuietAction, SuggestionList } from "./Controls";
 import { Field, TextInput } from "./Field";
 import { useSupabase } from "@/lib/supabase";
@@ -349,21 +350,19 @@ export function StationBoard({ destination }: { destination: string }) {
 
   if (!resolved) {
     return (
-      <section className="mt-6">
-        <SectionRule />
-        <p className="mt-3 text-small text-muted">Checking for bikes…</p>
-      </section>
+      <TripSection title="Live bikes">
+        <p className="text-small text-muted">Checking for bikes…</p>
+      </TripSection>
     );
   }
 
   if (lookupError) {
     return (
-      <section className="mt-6">
-        <SectionRule />
-        <p className="mt-3 border-l-[3px] border-error bg-error/10 px-3 py-1.5 text-small text-error">
+      <TripSection title="Live bikes">
+        <p className="border-l-[3px] border-error bg-error/10 px-3 py-1.5 text-small text-error">
           Couldn&rsquo;t check for bikes here. {lookupError}
         </p>
-      </section>
+      </TripSection>
     );
   }
 
@@ -371,13 +370,12 @@ export function StationBoard({ destination }: { destination: string }) {
      trips land here — Lisbon has no seeded system — so this is a main path. */
   if (!system) {
     return (
-      <section className="mt-6">
-        <SectionRule />
-        <p className="mt-3 text-small text-muted">
+      <TripSection title="Live bikes" meta={destination}>
+        <p className="text-small text-muted">
           No bikeshare system in {destination} yet. Chicago, New York, Boston,
           Washington and San Francisco are covered.
         </p>
-      </section>
+      </TripSection>
     );
   }
 
@@ -391,23 +389,12 @@ export function StationBoard({ destination }: { destination: string }) {
   const state: Freshness = freshnessOf(latestRun, lastOkRun);
 
   return (
-    <section className="mt-6">
-      <SectionRule />
-      {/* This is the live half of the assignment, so it gets a heading rather
-          than hiding behind 11px of label text. I folded the whole section
-          away to calm the page down and buried the one thing that is actually
-          updating itself — wrong trade. The page is calmed by folding the
-          *search* instead, below: that is the occasional control, this is the
-          thing worth looking at. */}
-      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="font-display text-[22px] font-semibold leading-tight text-ink">
-          Live bikes in {system.city}
-        </h2>
-        <Label>{system.name} · updating itself</Label>
-      </div>
-
+    <TripSection
+      title={`Live bikes in ${system.city}`}
+      meta={`${system.name} · updating itself`}
+      note={COUNTS_EXPLAINER}
+    >
       <FreshnessLine state={state} line={freshnessLine(state, lastOkRun)} />
-      <p className="mt-1 text-small text-muted">{COUNTS_EXPLAINER}</p>
 
       {followed.length > 0 ? (
         <ul className="mt-3 border border-rule-strong bg-surface shadow-raised">
@@ -485,7 +472,7 @@ export function StationBoard({ destination }: { destination: string }) {
         )}
         </div>
       </details>
-    </section>
+    </TripSection>
   );
 }
 

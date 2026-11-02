@@ -30,6 +30,7 @@ import { categoriesPresent, type Item } from "@/lib/types";
 import { buildInventory, ownedCounts, shortfall } from "@/lib/inventory";
 import { StationBoard } from "@/components/StationBoard";
 import { DayPlan } from "@/components/DayPlan";
+import { TripSection } from "@/components/TripSection";
 import { citySlugFor } from "@/lib/places";
 import { tripDays } from "@/lib/trip-days";
 
@@ -219,15 +220,17 @@ function Checklist() {
       <h1 className="mt-1 font-display text-heading text-ink">{trip.name}</h1>
 
       {conditions && (
-        <ConditionsNote
-          conditions={conditions}
-          month={month}
-          destination={trip.destination}
-          source={trip.climateSlug ? "climate" : "manual"}
-          live={live}
-          startDate={trip.startDate}
-          endDate={trip.endDate}
-        />
+        <TripSection title="Weather" meta="Open-Meteo · 15-year averages">
+          <ConditionsNote
+            conditions={conditions}
+            month={month}
+            destination={trip.destination}
+            source={trip.climateSlug ? "climate" : "manual"}
+            live={live}
+            startDate={trip.startDate}
+            endDate={trip.endDate}
+          />
+        </TripSection>
       )}
 
       {/* Where you'll be each day, built from the same per-day normals the
@@ -247,122 +250,131 @@ function Checklist() {
           half of this page, not an appendix to the list. */}
       <StationBoard destination={trip.destination} />
 
-      {/* --- progress --- */}
-      {total > 0 && (
-        <div className="mt-6">
-          <div className="mb-1.5 flex items-baseline justify-between gap-3">
-            <Label>{allPacked ? "All packed" : `${left} still to pack`}</Label>
-            <span className="flex items-baseline gap-3">
-              <SavedNote watch={`${packed}/${total}`} />
-              <PackCount packed={packed} total={total} />
-            </span>
+      {/* Everything to do with packing in one frame: the progress bar, the
+          list itself, and the form at the foot. They were three loose blocks
+          with three separators, which is most of why the page felt scattered. */}
+      <TripSection
+        title="Packing list"
+        meta={allPacked ? "All packed" : `${left} still to pack`}
+      >
+        {/* --- progress --- */}
+        {total > 0 && (
+          <div className="mt-6">
+            <div className="mb-1.5 flex items-baseline justify-between gap-3">
+              <Label>{allPacked ? "All packed" : `${left} still to pack`}</Label>
+              <span className="flex items-baseline gap-3">
+                <SavedNote watch={`${packed}/${total}`} />
+                <PackCount packed={packed} total={total} />
+              </span>
+            </div>
+            <PackProgress packed={packed} total={total} />
+
+            {/* Said once, here, and only when it actually binds.
+                Clothing counts stop growing after ten days, which is right — you
+                do laundry instead of carrying three weeks of socks — but silently
+                right. Change a long trip's dates and "Trousers 4" becomes 5 while
+                "Underwear 11" doesn't move, which reads as a broken rebuild. A
+                rule nobody states is indistinguishable from a bug.
+
+                Not a per-row note: those were tried and removed, because the same
+                sentence repeated down every climate-driven row said nothing the
+                header hadn't already said better. */}
+            {days > LAUNDRY_CAP_DAYS && (
+              <p className="measure mt-2 text-small text-muted">
+                Clothing counts stop at {LAUNDRY_CAP_DAYS} days — on a trip this
+                long you&apos;ll do laundry rather than pack more, so those
+                numbers stay put if you move the dates.
+              </p>
+            )}
           </div>
-          <PackProgress packed={packed} total={total} />
+        )}
 
-          {/* Said once, here, and only when it actually binds.
-              Clothing counts stop growing after ten days, which is right — you
-              do laundry instead of carrying three weeks of socks — but silently
-              right. Change a long trip's dates and "Trousers 4" becomes 5 while
-              "Underwear 11" doesn't move, which reads as a broken rebuild. A
-              rule nobody states is indistinguishable from a bug.
+        {/* Completion, announced politely rather than shouted. */}
+        <p aria-live="polite" className="mt-4 text-body text-success">
+          {allPacked ? "Packed. Have a good trip." : ""}
+        </p>
 
-              Not a per-row note: those were tried and removed, because the same
-              sentence repeated down every climate-driven row said nothing the
-              header hadn't already said better. */}
-          {days > LAUNDRY_CAP_DAYS && (
-            <p className="measure mt-2 text-small text-muted">
-              Clothing counts stop at {LAUNDRY_CAP_DAYS} days — on a trip this
-              long you&apos;ll do laundry rather than pack more, so those
-              numbers stay put if you move the dates.
+        {allPacked && phase !== "past" && (
+          <Card className="mt-2">
+            <p className="measure text-body text-ink">
+              When you&apos;re back, two quick questions will make the next one
+              better.
+            </p>
+            <Button variant="secondary" className="mt-3" onClick={finish}>
+              I&apos;m back — review this trip
+            </Button>
+          </Card>
+        )}
+
+        {/* --- the filter --- */}
+        {total > 0 && (
+          <label className="mt-6 flex cursor-pointer items-center gap-2 text-small text-ink">
+            <Checkbox
+              checked={hidePacked}
+              onChange={(e) => toggleFilter(e.target.checked)}
+            />
+            Hide what&apos;s packed
+          </label>
+        )}
+
+        {/* --- the list --- */}
+        <div className="mt-5">
+          {categoriesPresent(trip.items.map((i) => i.category)).map((category) => (
+            <CategorySection
+              key={category}
+              category={category}
+              items={visible.filter((i) => i.category === category)}
+              ownedFor={ownedFor}
+              onToggle={(itemId) => toggleItem(trip.id, itemId)}
+              onQty={(itemId, qty) => setItemQty(trip.id, itemId, qty)}
+              onRemove={(itemId) => removeItem(trip.id, itemId)}
+              adding={addingTo === category}
+              onAddHere={() =>
+                setAddingTo((open) => (open === category ? null : category))
+              }
+              addForm={
+                <InlineAddItem
+                  category={category}
+                  existingItems={trip.items}
+                  onAdd={(item) => addItem(trip.id, item)}
+                  onBump={(item) => setItemQty(trip.id, item.id, item.qty + 1)}
+                  onClose={() => setAddingTo(null)}
+                />
+              }
+            />
+          ))}
+
+          {hidePacked && visible.length === 0 && total > 0 && (
+            <p className="text-body text-muted">
+              Nothing left. Untick the filter to see the whole list again.
+            </p>
+          )}
+
+          {total === 0 && (
+            <p className="measure text-body text-muted">
+              This list is empty. Add what you need below — it&apos;ll be
+              remembered for next time.
             </p>
           )}
         </div>
-      )}
 
-      {/* Completion, announced politely rather than shouted. */}
-      <p aria-live="polite" className="mt-4 text-body text-success">
-        {allPacked ? "Packed. Have a good trip." : ""}
-      </p>
-
-      {allPacked && phase !== "past" && (
-        <Card className="mt-2">
-          <p className="measure text-body text-ink">
-            When you&apos;re back, two quick questions will make the next one
-            better.
-          </p>
-          <Button variant="secondary" className="mt-3" onClick={finish}>
-            I&apos;m back — review this trip
-          </Button>
-        </Card>
-      )}
-
-      {/* --- the filter --- */}
-      {total > 0 && (
-        <label className="mt-6 flex cursor-pointer items-center gap-2 text-small text-ink">
-          <Checkbox
-            checked={hidePacked}
-            onChange={(e) => toggleFilter(e.target.checked)}
+        {/* --- add your own --- */}
+        <div className="mt-8 border-t-2 border-ink pt-5">
+          <AddItemForm
+            existingItems={trip.items}
+            existingCategories={categoriesPresent(
+              trip.items.map((i) => i.category),
+            )}
+            inventoryOptions={inventoryOptions}
+            onAdd={(item) => addItem(trip.id, item)}
+            /* Same thing the row's own stepper does — which is the point: asking
+               for a second T-shirt should not depend on which control you reach
+               for. */
+            onBump={(item) => setItemQty(trip.id, item.id, item.qty + 1)}
           />
-          Hide what&apos;s packed
-        </label>
-      )}
+        </div>
 
-      {/* --- the list --- */}
-      <div className="mt-5">
-        {categoriesPresent(trip.items.map((i) => i.category)).map((category) => (
-          <CategorySection
-            key={category}
-            category={category}
-            items={visible.filter((i) => i.category === category)}
-            ownedFor={ownedFor}
-            onToggle={(itemId) => toggleItem(trip.id, itemId)}
-            onQty={(itemId, qty) => setItemQty(trip.id, itemId, qty)}
-            onRemove={(itemId) => removeItem(trip.id, itemId)}
-            adding={addingTo === category}
-            onAddHere={() =>
-              setAddingTo((open) => (open === category ? null : category))
-            }
-            addForm={
-              <InlineAddItem
-                category={category}
-                existingItems={trip.items}
-                onAdd={(item) => addItem(trip.id, item)}
-                onBump={(item) => setItemQty(trip.id, item.id, item.qty + 1)}
-                onClose={() => setAddingTo(null)}
-              />
-            }
-          />
-        ))}
-
-        {hidePacked && visible.length === 0 && total > 0 && (
-          <p className="text-body text-muted">
-            Nothing left. Untick the filter to see the whole list again.
-          </p>
-        )}
-
-        {total === 0 && (
-          <p className="measure text-body text-muted">
-            This list is empty. Add what you need below — it&apos;ll be
-            remembered for next time.
-          </p>
-        )}
-      </div>
-
-      {/* --- add your own --- */}
-      <div className="mt-8 border-t-2 border-ink pt-5">
-        <AddItemForm
-          existingItems={trip.items}
-          existingCategories={categoriesPresent(
-            trip.items.map((i) => i.category),
-          )}
-          inventoryOptions={inventoryOptions}
-          onAdd={(item) => addItem(trip.id, item)}
-          /* Same thing the row's own stepper does — which is the point: asking
-             for a second T-shirt should not depend on which control you reach
-             for. */
-          onBump={(item) => setItemQty(trip.id, item.id, item.qty + 1)}
-        />
-      </div>
+      </TripSection>
 
       {/* --- housekeeping ---
           Order matters here and it was wrong. "Delete trip" sat in the

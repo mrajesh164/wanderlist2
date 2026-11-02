@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSession, useUser } from "@clerk/nextjs";
-import { Label, SectionRule } from "./Card";
+import { Label } from "./Card";
+import { TripSection } from "./TripSection";
 import { useSupabase } from "@/lib/supabase";
 import { buildItinerary, reasonLine, type PlannedDay } from "@/lib/itinerary";
 import {
@@ -228,15 +229,12 @@ export function DayPlan({
   if (plan.length === 0) return null;
 
   return (
-    <section className="mt-6">
-      <SectionRule />
-      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <Label>Your days</Label>
-        <Label>Built from the forecast</Label>
-      </div>
-      <p className="mt-1 text-small text-muted">{COUNTS_EXPLAINER}</p>
-
-      <ol className="mt-3 border border-rule-strong bg-surface shadow-raised">
+    <TripSection
+      title="Your days"
+      meta="Built from the forecast"
+      note={COUNTS_EXPLAINER}
+    >
+      <ol className="border border-rule-strong bg-surface shadow-raised">
         {plan.map((day) => (
           <li
             key={day.date.toISOString()}
@@ -246,7 +244,7 @@ export function DayPlan({
           </li>
         ))}
       </ol>
-    </section>
+    </TripSection>
   );
 }
 
