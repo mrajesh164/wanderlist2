@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useSession, useUser } from "@clerk/nextjs";
 import { Label, SectionRule } from "./Card";
 import { Chip, QuietAction, SuggestionList } from "./Controls";
 import { Field, TextInput } from "./Field";
@@ -39,6 +39,8 @@ export function StationBoard({ destination }: { destination: string }) {
      `with check` compares it against the JWT, so a blank or borrowed id is
      refused rather than silently filed under somebody else. */
   const { user } = useUser();
+  /* The raw Clerk session, needed to authenticate the Realtime socket. */
+  const { session } = useSession();
   const userId = user?.id ?? null;
 
   const [system, setSystem] = useState<BikeSystem | null>(null);
@@ -138,38 +140,77 @@ export function StationBoard({ destination }: { destination: string }) {
      person read the row — and when one is missing it fails silently. If the
      numbers stop moving, check those three before debugging here. */
   useEffect(() => {
-    if (!supabase || !system) return;
+    if (!supabase || !system || !session) return;
 
-    const channel = supabase
-      .channel(`live-${system.slug}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "stations",
-          filter: `system_slug=eq.${system.slug}`,
-        },
-        (payload) => {
-          const row = payload.new as Station;
-          setFollowed((prev) =>
-            prev.some((s) => s.station_id === row.station_id)
-              ? prev.map((s) => (s.station_id === row.station_id ? { ...s, ...row } : s))
-              : prev,
-          );
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "worker_runs" },
-        () => void loadRuns(),
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let refresh: ReturnType<typeof setInterval> | null = null;
+    let cancelled = false;
+
+    (async () => {
+      /**
+       * Authenticate the socket *before* subscribing, and keep it authenticated.
+       *
+       * Postgres Changes only delivers rows the subscriber is allowed to read,
+       * so the websocket has to carry the Clerk token or every policy matches
+       * nothing and the channel goes quiet with no error anywhere.
+       *
+       * supabase-js does call `realtime.setAuth` once, in the constructor, as a
+       * floating promise — so a subscribe that happens first races it. Worse,
+       * that is the *only* time it fires under third-party auth: the refresh
+       * path hangs off Supabase's own auth events, which Clerk never emits. A
+       * Clerk session token lives about a minute, so the socket would go stale
+       * and silently stop delivering. Hence the explicit set, and the interval.
+       */
+      const token = await session.getToken();
+      if (cancelled) return;
+      if (token) supabase.realtime.setAuth(token);
+
+      channel = supabase
+        .channel(`live-${system.slug}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "stations",
+            filter: `system_slug=eq.${system.slug}`,
+          },
+          (payload) => {
+            const row = payload.new as Station;
+            setFollowed((prev) =>
+              prev.some((s) => s.station_id === row.station_id)
+                ? prev.map((s) => (s.station_id === row.station_id ? { ...s, ...row } : s))
+                : prev,
+            );
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "worker_runs" },
+          () => void loadRuns(),
+        )
+        .subscribe((status) => {
+          /* A channel that cannot authenticate reports CHANNEL_ERROR and then
+             says nothing ever again. Refetching on a reconnect also closes the
+             gap for anything that changed while the socket was down. */
+          if (status === "SUBSCRIBED") {
+            void loadFollowed();
+            void loadRuns();
+          }
+        });
+
+      refresh = setInterval(async () => {
+        const next = await session.getToken();
+        if (next) supabase.realtime.setAuth(next);
+      }, 45_000);
+    })();
 
     return () => {
-      void supabase.removeChannel(channel);
+      cancelled = true;
+      if (refresh) clearInterval(refresh);
+      if (channel) void supabase.removeChannel(channel);
     };
-  }, [supabase, system, loadRuns]);
+  }, [supabase, system, session, loadRuns, loadFollowed]);
 
   /**
    * Finding stations by *where you're staying*, not by station name.
