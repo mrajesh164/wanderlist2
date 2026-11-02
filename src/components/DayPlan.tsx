@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { Label, SectionRule } from "./Card";
+import { QuietAction } from "./Controls";
 import { useSupabase } from "@/lib/supabase";
 import { buildItinerary, reasonLine, type PlannedDay } from "@/lib/itinerary";
 import {
@@ -43,7 +45,9 @@ export function DayPlan({
   days: TripDay[];
 }) {
   const supabase = useSupabase();
+  const { user } = useUser();
   const [stations, setStations] = useState<Station[]>([]);
+  const [followed, setFollowed] = useState<Set<string>>(new Set());
 
   const plan = buildItinerary(citySlug, days);
 
@@ -79,6 +83,38 @@ export function DayPlan({
        on every render because the plan is derived rather than stored. */
   }, [supabase, citySlug, plan.map((d) => d.place.area).join("|")]);
 
+  const reload = useCallback(async () => {
+    if (!supabase || !citySlug) return;
+    const { data } = await supabase
+      .from("station_follows")
+      .select("station_id")
+      .eq("system_slug", citySlug);
+    setFollowed(new Set((data ?? []).map((f) => f.station_id)));
+  }, [supabase, citySlug]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  /**
+   * Watching a day's dock is what makes that day live.
+   *
+   * The worker only polls stations somebody follows — that is what keeps the
+   * write volume at 3% of the feed — so a planned day shows a dock and a
+   * distance but no numbers until someone asks for them. One tap here is the
+   * ask, and the counts arrive on the next run, at most thirty seconds later.
+   */
+  async function watch(station: Station) {
+    if (!supabase || !citySlug || !user) return;
+    setFollowed((prev) => new Set(prev).add(station.station_id));
+    await supabase.from("station_follows").insert({
+      user_id: user.id,
+      system_slug: citySlug,
+      station_id: station.station_id,
+    });
+    void reload();
+  }
+
   if (plan.length === 0) return null;
 
   return (
@@ -95,7 +131,12 @@ export function DayPlan({
             key={day.date.toISOString()}
             className="border-b border-rule px-3 py-3 last:border-b-0"
           >
-            <DayRow day={day} stations={stations} />
+            <DayRow
+              day={day}
+              stations={stations}
+              followed={followed}
+              onWatch={watch}
+            />
           </li>
         ))}
       </ol>
@@ -103,7 +144,17 @@ export function DayPlan({
   );
 }
 
-function DayRow({ day, stations }: { day: PlannedDay; stations: Station[] }) {
+function DayRow({
+  day,
+  stations,
+  followed,
+  onWatch,
+}: {
+  day: PlannedDay;
+  stations: Station[];
+  followed: Set<string>;
+  onWatch: (s: Station) => void;
+}) {
   const why = reasonLine(day);
 
   /* The nearest station to *this* day's place, with live counts if the worker
@@ -137,11 +188,20 @@ function DayRow({ day, stations }: { day: PlannedDay; stations: Station[] }) {
       </span>
 
       {nearest && (
-        <span className="text-small text-muted">
-          {nearest.station.name ?? "Nearest dock"} ·{" "}
-          {distanceLabel(nearest.metres)}
-          {nearest.station.bikes_available !== null && (
-            <> · {countsLabel(nearest.station)}</>
+        <span className="flex items-baseline gap-3 text-small">
+          <span className="text-muted">
+            {nearest.station.name ?? "Nearest dock"} ·{" "}
+            {distanceLabel(nearest.metres)}
+          </span>
+          {followed.has(nearest.station.station_id) ? (
+            <span className="text-ink">{countsLabel(nearest.station)}</span>
+          ) : (
+            <QuietAction
+              onClick={() => onWatch(nearest.station)}
+              label={`Watch ${nearest.station.name ?? "this dock"}`}
+            >
+              Watch
+            </QuietAction>
           )}
         </span>
       )}
