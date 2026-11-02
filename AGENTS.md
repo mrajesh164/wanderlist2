@@ -661,6 +661,51 @@ no glow and no animation beyond the fade — this is the one moment the live lay
 is visible as *live*, and it has to stay inside a design system whose border
 radius is zero.
 
+### The day plan, and why it exists
+
+The bikes panel was coherent on its own and disconnected from the app around
+it. The conditions strip **changes the packing list** — the band and wetness
+are what generated it. The bikes panel sat in the same cluster, looked like a
+peer, and produced nothing. It was a readout.
+
+An itinerary fixes that, but only the generated kind. A hand-authored plan
+would be a third concept competing for the page; a plan that is **a function of
+the destination and the dates** is the same move the packing list already
+makes, and it gives the live layer something to be about.
+
+**`lib/places.ts` is curated, and the app never geocodes it.** Same pattern as
+`photos.ts`. Each `area` was resolved once through Open-Meteo's geocoder and
+accepted only if it landed within 25km of the city claiming it — which rejected
+four of the first eight New York candidates. "Williamsburg" resolves 215km
+away, "SoHo" 506km, "Chelsea" 94km, "Dumbo" to another continent. Famous
+neighbourhood names are not unique. **Geocode and check the distance before
+adding one; don't type coordinates from memory.**
+
+**`lib/itinerary.ts` picks a place per day from the same per-day normals the
+strip draws.** A wet or cold day takes an indoor place; a fine day takes an
+outdoor one; nothing repeats until the list runs out. The second half of that
+rule was missing at first, and a dry run caught it: with only the indoor
+preference, a fine Sunday took the museum because the museum sorts first,
+leaving a wet Tuesday one fewer indoor option. **Indoor places are the scarce
+resource** — spend them on the days that need them.
+
+**Nothing is stored.** The plan is derived, so it survives a reload with no
+table behind it, and the same trip next year regenerates against next year's
+dates. That is deliberate: a stored plan would be trip-specific state that
+*doesn't* carry forward, which would compete with the correction loop instead
+of leaving it alone.
+
+**`citySlugFor` shares a slug space with `bike_systems`.** `chi` has places and
+live bikes; `lis` has places and no bikes, so a station query for `lis` returns
+nothing. That is the correct behaviour, not a special case to code around.
+
+**The day's dock has a Watch control, and that is load-bearing.** The worker
+only polls followed stations — the thing that keeps writes at 3% of the feed —
+so a planned day shows a dock and a distance but no numbers until somebody
+asks. One tap is the ask, and counts arrive within one cron interval. It also
+inverts the discovery problem: you follow the dock *by Tuesday's plan* rather
+than hunting a station name you were never going to know.
+
 ### Repo layout — one repo, two runtimes
 
 No workspaces, no `apps/` restructure. `supabase/` already sits beside `src/`:
