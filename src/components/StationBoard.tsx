@@ -371,6 +371,13 @@ export function StationBoard({ destination }: { destination: string }) {
     );
   }
 
+  /* Counted after the filter, not before. Saying "nearest 6" above a list of
+     five — because one is already followed — is a small lie, and it is the
+     kind a reader notices immediately. */
+  const unfollowedMatches = matches.filter(
+    (m) => !followed.some((f) => f.station_id === m.station_id),
+  );
+
   const state: Freshness = freshnessOf(latestRun, lastOkRun);
 
   return (
@@ -429,9 +436,7 @@ export function StationBoard({ destination }: { destination: string }) {
           )}
         </Field>
         <SuggestionList
-          items={matches.filter(
-            (m) => !followed.some((f) => f.station_id === m.station_id),
-          )}
+          items={unfollowedMatches}
           getKey={(s) => s.station_id}
           onPick={(s) => void follow(s)}
         >
@@ -446,9 +451,9 @@ export function StationBoard({ destination }: { destination: string }) {
             </span>
           )}
         </SuggestionList>
-        {near && matches.length > 0 && (
+        {near && unfollowedMatches.length > 0 && (
           <p className="mt-1 text-small text-muted">
-            Nearest {matches.length} to {near.label}
+            Nearest {unfollowedMatches.length} to {near.label}
           </p>
         )}
       </div>
