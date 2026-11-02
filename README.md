@@ -11,13 +11,120 @@ starts already corrected.
 Built for **Design, Build, Ship · MPCS 51238**. Assignment 3 designed the flows and the
 interface; **Assignment 4 (Full Stack App)** put accounts, a database and one external API
 underneath them, which is what makes the list follow you from the laptop you planned on to
-the phone beside the suitcase.
+the phone beside the suitcase. **Assignment 5 (Live Data System)** added a worker that runs
+around the clock and a page that updates itself.
 
-- **Live:** https://wanderlist-mocha.vercel.app/ — production follows `main`
-- **Assignment 3's build:** https://departure-board-nine.vercel.app/ — a separate repo,
-  still up, no accounts and no backend
-- **Flows:** [`flows.md`](./flows.md) · **Onboarding research:** [`research.md`](./research.md)
-- **Agent context:** [`AGENTS.md`](./AGENTS.md)
+**Live:** <https://wanderlist2.vercel.app>
+
+## The live layer — Assignment 5
+
+A trip knows where you're going and when. That already drove the packing list, through
+fifteen years of weather normals for your dates. Now it drives two more things.
+
+**Your days.** The destination and the dates generate a plan — somewhere to be each day,
+picked off the same per-day normals the weather strip draws. A wet day takes an indoor
+place, a fine one takes outdoors, nothing repeats until the list runs out. Nothing is
+stored: the plan is a function of the trip, so it regenerates next year against next
+year's dates rather than carrying stale state forward.
+
+**Live bikes.** For each planned day, the nearest bikeshare dock and how many bikes and
+empty spaces it has *right now*, arriving without a refresh.
+
+```
+GBFS feed  ──every 30s──▶  Edge Function  ──only changed rows──▶  Postgres  ──Realtime──▶  Page
+  (Divvy)                   (Supabase Cron)                       (Supabase)              (Vercel)
+```
+
+### Why bikeshare
+
+Ambient data beats episodic data. Anything tied to one person's trip — their flight, their
+game — only moves while that trip is happening, and would be a still photograph when
+somebody looks at it. Bikes come and go in Chicago at 2am.
+
+Measured before committing to it, not assumed: **2,078 Chicago stations, 72 of which
+changed across two calls 120 seconds apart — 3.5%.** The feed advertises `ttl: 60`.
+
+### The worker
+
+`supabase/functions/poll-stations/index.ts`, a Deno Edge Function invoked by Supabase Cron
+every 30 seconds. Thirty rather than ten because the feed only republishes once a minute,
+so a faster poll re-reads bytes we already have; thirty gives two polls per refresh window
+at 86,400 invocations a month against a 500,000 allowance.
+
+Each run reads which stations anybody follows, fetches `station_status.json` once per
+followed system, writes **only the rows whose counts actually moved**, and records one row
+in `worker_runs` either way — when, whether it worked, and how many rows changed.
+
+That last number is the point. Writing every row would be equally correct and roughly a
+29× multiplier on the Realtime budget, because Realtime bills every change sent to every
+open page. Watched across three runs before scheduling it:
+
+| run | rows written | |
+| --- | --- | --- |
+| cold | 100 | every followed station was new |
+| immediately after | **0** | the feed hadn't refreshed |
+| 70s later | 3 | 3% of 100, against the 3.5% measured independently |
+
+### Freshness, and its four states
+
+`stations.updated_at` can only say the numbers are old. It cannot say *why*, and stale and
+down are different failures — one means the pipe is slow, the other means it is broken.
+That is what `worker_runs` is for.
+
+| state | when | |
+| --- | --- | --- |
+| Loading | no run read yet | first paint |
+| Fresh | last good run ≤ 2 cron intervals | counts are current |
+| Stale | 2–10 intervals | amber rule and tint, "last updated 4 minutes ago" |
+| Down | last run failed, or none good in 10 intervals | red rule, and it stops presenting old numbers as live |
+
+Thresholds are expressed in cron intervals rather than seconds, so changing the schedule
+can't silently leave the page lying about how current it is.
+
+### Where the API is called, and why there
+
+**Nowhere in the browser.** Every `fetch` in `src/` is same-origin. The GBFS feed is
+fetched only by the Edge Function, on Supabase's servers, with the service role key that
+Supabase injects there and that never enters this repository. Open-Meteo is reached only
+through `/api/climate` and `/api/place`, both route handlers. `StationBoard.tsx` contains
+no `fetch` at all — it talks to Supabase and nothing else.
+
+### The four tables
+
+Two shapes, and the split is the access-control story.
+
+| table | | |
+| --- | --- | --- |
+| `bike_systems` | the GBFS feeds we know how to poll | shared, read-only |
+| `stations` | live counts plus the static description | shared, read-only |
+| `worker_runs` | one row per run | shared, read-only |
+| `station_follows` | what each person watches | **fenced per user** |
+
+The three shared tables are readable by any signed-in user and writable by none — refused
+with explicit policies rather than by leaving the policy out, so a reviewer reading
+`pg_policies` sees a decision instead of a gap. Only the worker writes them, and the
+service role bypasses RLS.
+
+`station_follows` carries all four policies, and insert and update carry `with check` as
+well as `using`. Without `with check`, `using` alone lets someone write a row stamped with
+another person's `user_id` — which is exactly the omission `/security-review` caught in
+Assignment 4. Verified as two simulated users:
+
+```
+A sees own rows      1
+A sees B's rows      0
+insert as B          ERROR 42501: new row violates row-level security policy
+insert into stations ERROR 42501
+insert worker_runs   ERROR 42501
+```
+
+### One repo, two runtimes
+
+The Next.js app and the worker live together; `supabase/` sits beside `src/`. Edge
+Functions run on **Deno**, so `"supabase"` is in `tsconfig.json`'s `exclude` — without it
+`next build` type-checks the worker and fails on `Deno` being undefined. Note that
+`exclude` only drops files from the initial glob: anything `src/` *imports* from under
+`supabase/` is pulled back in and checked, so shared code stays plain types.
 
 ## The core task, as one sentence
 
@@ -322,6 +429,10 @@ a quantity stepper. See **Quantities** below.
 
 ## Tech
 
+Next.js and Tailwind on Vercel; Clerk for sign-in; Supabase for Postgres, row-level
+security, Realtime and the worker. The worker is a Deno Edge Function on Supabase Cron —
+see **The live layer** above.
+
 Next.js 16.4.2 (App Router), React 19.3, Tailwind CSS v4, Clerk for accounts, Supabase for
 data, Playwright for the one test. Those are the whole dependency list — still no state
 library, no form library, no date library, no UI kit and no icon package; the glyphs on the
@@ -360,7 +471,10 @@ integration points at the Clerk instance, so Supabase verifies Clerk's token dir
 the app doesn't error — every policy matches nothing and the app simply looks *empty*.
 Rule it out first when rows vanish.
 
-The same five go in Vercel's environment variables. Migrations live in
+The same five go in Vercel's environment variables. Assignment 5 adds no new keys: the
+worker's service role key is injected by Supabase on its own servers and never appears
+here, and the cron job calls the function with the project's *anon* key, which is public
+by design. Migrations live in
 [`supabase/migrations/`](./supabase/migrations) and run in filename order.
 
 There's a **Reset to first visit** control in the footer, which is the quickest way to see
