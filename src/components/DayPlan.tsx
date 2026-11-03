@@ -272,7 +272,23 @@ export function DayPlan({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- neededKey is `needed`
   }, [supabase, citySlug, user, neededKey, followed]);
 
-  if (plan.length === 0) return null;
+  /* A city with no curated places renders nothing at all otherwise — the same
+     silent null that made the bikes panel look unbuilt. Say which cities have
+     plans, so the absence reads as coverage rather than breakage. */
+  if (plan.length === 0) {
+    if (!citySlug) {
+      return (
+        <TripSection title="Your days" meta="No plan for this destination">
+          <p className="measure text-small text-muted">
+            Day plans are written by hand, so they only exist for the cities we
+            have them for: Chicago, New York, Boston, Washington, San Francisco
+            and Lisbon. The packing list and the weather work everywhere.
+          </p>
+        </TripSection>
+      );
+    }
+    return null;
+  }
 
   return (
     <TripSection
