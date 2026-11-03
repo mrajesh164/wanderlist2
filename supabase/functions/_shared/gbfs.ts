@@ -40,6 +40,8 @@ export type StationFactRow = StationFacts & {
 type RawStatus = {
   station_id?: unknown;
   num_bikes_available?: unknown;
+  /** GBFS 3.0's name for the same number. */
+  num_vehicles_available?: unknown;
   num_ebikes_available?: unknown;
   num_docks_available?: unknown;
   last_reported?: unknown;
@@ -88,11 +90,22 @@ function localised(v: unknown): string | null {
   return str(en?.text) ?? str(entries[0]?.text);
 }
 
-/** GBFS reports times as unix seconds; the column is timestamptz. */
+/**
+ * When a station last spoke, in either GBFS generation.
+ *
+ * Up to 2.x this is unix seconds. **GBFS 3.0 made it an RFC3339 string**, so a
+ * seconds-only reader stores null for every station in a 3.0 feed — which is
+ * how Toronto ended up with 1,075 rows and not one `last_reported` between
+ * them. Same shape of bug as `localised()` below; 3.0 renamed more than names.
+ */
 export function unixToISO(v: unknown): string | null {
   const n = num(v);
-  if (n === null || n <= 0) return null;
-  return new Date(n * 1000).toISOString();
+  if (n !== null) return n > 0 ? new Date(n * 1000).toISOString() : null;
+
+  const s = str(v);
+  if (!s) return null;
+  const parsed = Date.parse(s);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
 /**
@@ -114,7 +127,18 @@ export function parseStatus(
     out.set(id, {
       system_slug: systemSlug,
       station_id: id,
-      bikes_available: num(s?.num_bikes_available),
+      /* 2.x calls this `num_bikes_available`; **3.0 renamed it
+         `num_vehicles_available`**. Reading only the old name is why every
+         3.0 system — Toronto, Pittsburgh, bicimad — stored a null bike count
+         and the trip page concluded there was no bikeshare there at all. */
+      bikes_available:
+        num(s?.num_bikes_available) ?? num(s?.num_vehicles_available),
+      /* Deliberately 2.x-only. 3.0 moved the breakdown into
+         `vehicle_types_available`, keyed by ids whose meaning lives in a
+         third feed (`vehicle_types.json`) — so working out which are electric
+         means another fetch per system. Null is honest; guessing from id
+         names like "EFIT" would not be, and the UI already treats a missing
+         ebike count as "not published" rather than as zero. */
       ebikes_available: num(s?.num_ebikes_available),
       docks_available: num(s?.num_docks_available),
       last_reported: unixToISO(s?.last_reported),

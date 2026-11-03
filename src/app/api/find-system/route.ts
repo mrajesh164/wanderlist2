@@ -27,6 +27,9 @@ import { geocode } from "@/lib/open-meteo";
 const REGISTRY =
   "https://raw.githubusercontent.com/MobilityData/gbfs/master/systems.csv";
 
+/** Kept in step with MIN_STATIONS in scripts/verify-systems.mjs. */
+const MIN_STATIONS = 20;
+
 /** Minimal CSV reader — the registry is machine-generated and well-formed. */
 function parseCsv(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(Boolean);
@@ -84,17 +87,32 @@ function norm(s: string): string {
 }
 
 /**
- * Is this a system with actual docks?
+ * Is this a system worth putting on a trip page?
  *
- * Several operators serve the same city and the registry lists them all —
- * Paris has six, Seattle two. Scooter fleets publish `station_status` too,
- * where a "station" is a painted parking square: Bird Seattle reports zero,
- * Dott Paris reports 12,667 of them with no capacity at all. Requiring at
- * least one station that declares a dock capacity is what separates a
- * bikeshare from a scooter fleet, and it is why Seattle correctly comes back
- * as "no system" rather than as Bird.
+ * Three questions, and each one is here because a real system failed it in a
+ * way that reached the screen. This is the fallback path — `bike_systems` is
+ * normally filled ahead of time by `scripts/verify-systems.mjs`, which asks
+ * exactly the same three — so if you change a rule, change it in both.
+ *
+ *  1. **Enough stations.** Several operators serve one city and the registry
+ *     lists them all. Scooter fleets publish `station_status` too, where a
+ *     "station" is a painted parking square; a handful of those is not
+ *     something anyone can plan a trip around.
+ *  2. **Some station reports empty docks.** Dott Paris publishes 12,667
+ *     stations and `num_docks_available` on none of them.
+ *  3. **Some station has a bike in it right now.** Denver's docked bikeshare
+ *     shut down in 2020 and Lyft runs dockless scooters there instead, but the
+ *     station records survive with their capacity intact — all 119 reporting
+ *     16 empty spaces and zero bikes, forever. Capacity said "docked", and the
+ *     app dutifully offered a city where you can never get a bike.
+ *
+ * **`capacity` is not one of the questions, and used to be.** It is optional
+ * in GBFS: Indego in Philadelphia and Metro Bike Share in Los Angeles publish
+ * none at all, and requiring it rejected 395 systems including both of those.
+ * What a dock-based system actually always reports is how many spaces are
+ * free, which is question 2.
  */
-async function docked(
+async function worthShowing(
   statusUrl: string,
   informationUrl: string,
 ): Promise<boolean> {
@@ -104,31 +122,31 @@ async function docked(
     });
     if (!res.ok) return false;
     const body = (await res.json()) as {
-      data?: { stations?: { capacity?: number }[] };
+      data?: { stations?: { lat?: number; lon?: number }[] };
     };
-    const stations = body.data?.stations ?? [];
-    if (!stations.some((s) => (s.capacity ?? 0) > 0)) return false;
+    const located = (body.data?.stations ?? []).filter(
+      (s) => typeof s.lat === "number" && typeof s.lon === "number",
+    );
+    if (located.length < MIN_STATIONS) return false;
 
-    /**
-     * Capacity is not enough: a system can have docks and no bikes.
-     *
-     * Denver proved it. Its docked bikeshare shut down in 2020 and Lyft runs
-     * dockless scooters there now, but the station records survive with their
-     * capacity intact — all 119 of them reporting 16 empty spaces and zero
-     * bikes, forever. Capacity said "docked", and the app dutifully showed a
-     * city where you can never get a bike.
-     *
-     * So: at least one bike, somewhere, right now. A real system at four in
-     * the morning still has bikes in it; one hundred per cent empty across
-     * every station is a system that has stopped.
-     */
     const live = await fetch(statusUrl, { signal: AbortSignal.timeout(15_000) });
     if (!live.ok) return false;
     const now = (await live.json()) as {
-      data?: { stations?: { num_bikes_available?: number }[] };
+      data?: {
+        stations?: {
+          num_bikes_available?: number;
+          num_vehicles_available?: number;
+          num_docks_available?: number;
+        }[];
+      };
     };
-    return (now.data?.stations ?? []).some(
-      (s) => (s.num_bikes_available ?? 0) > 0,
+    const stations = now.data?.stations ?? [];
+    if (!stations.some((s) => (s.num_docks_available ?? 0) > 0)) return false;
+
+    /* GBFS 3.0 renamed `num_bikes_available` to `num_vehicles_available`.
+       Reading only the old name made every 3.0 system look empty. */
+    return stations.some(
+      (s) => (s.num_bikes_available ?? s.num_vehicles_available ?? 0) > 0,
     );
   } catch {
     return false;
@@ -200,7 +218,7 @@ export async function POST(request: Request) {
         const ss = feeds["station_status"];
         const si = feeds["station_information"];
         if (!ss || !si) continue;
-        if (!(await docked(ss, si))) continue;
+        if (!(await worthShowing(ss, si))) continue;
         hit = candidate;
         statusUrl = ss;
         informationUrl = si;

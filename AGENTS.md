@@ -479,17 +479,32 @@ owns, plus one table fenced per person.**
 
 #### bike_systems — reference, read-only
 
-The catalog of supported GBFS systems. Seeded by migration; a new city is one
-`insert`, not a redeploy.
+The catalogue of GBFS systems, and the list of destinations a trip may be made
+to. **Generated, not typed** — `scripts/verify-systems.mjs` probes
+MobilityData's registry and writes the rows that pass; see *The destination
+field only offers cities the live layer can serve*.
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `slug` | `text` pk | `chi`, `nyc`, `bos` — the code in the GBFS URL |
+| `slug` | `text` pk | `chi`, `nyc`, `pittsburgh` |
 | `name` | `text not null` | "Divvy" |
 | `city` | `text not null` | "Chicago" — matched against a trip's destination |
+| `region` / `country` | `text` | "IL", "US" — only to disambiguate in the picker |
 | `status_url` | `text not null` | `station_status.json` |
 | `information_url` | `text not null` | `station_information.json` |
+| `station_count` | `integer` | what the last probe saw |
+| `verified_at` | `timestamptz` | **null means do not offer this city** |
 | `ttl_seconds` | `integer not null default 60` | what the feed advertises |
+
+`unique (lower(city))`, because the regenerated catalogue has to update the row
+a trip already points at and registry System IDs are not stable: Chicago was
+`chi` when it was typed by hand and `lyft-chi` from the registry. Keying the
+upsert on slug would have created a second Chicago with no stations.
+
+**`verified_at` is cleared, never deleted.** A system whose bikes have gone
+stops being offered while its row and the stations referencing it stay put —
+Denver's 119 docks are somebody's trip history, and dropping them would be a
+destructive migration to tidy a list.
 
 #### stations — live rows, owned by nobody
 
@@ -676,12 +691,25 @@ strip is. The four-tab masthead stays as *Shape of the app* describes it.
 Bike. A brand-new account taps a starter and gets live data on its first screen,
 with nothing added. Don't "fix" the starters for this; they were already right.
 
-**Lisbon is the interesting one, and it is not a bug.** There is no seeded system
-for it, so the panel must have a designed absence: a quiet line saying this
-destination has no bikeshare, not an error, not a spinner, and not a blank space
-where a panel should be. That is the brief's *nothing found* state, and it will be
-the state a third of the starter trips land in — so it gets designed first, not
-last.
+**Where the *nothing found* state is still reachable, now that the picker only
+offers cities that work.** This matters: the brief grades a designed empty
+state, and a gate that makes it unreachable would be a regression dressed as a
+fix. Two live routes to it, both ordinary:
+
+- **A place inside a trip.** "Where you're staying" is free text against a
+  geocoder — type a neighbourhood that doesn't exist and nothing comes back.
+  This is the common one.
+- **A trip made before the gate existed**, or one whose system has since
+  stopped passing. `StationBoard` still falls back to `/api/find-system`, which
+  answers `404 none`, and the panel says so in a quiet line: not an error, not a
+  spinner, and not a blank space where a panel should be.
+
+Lisbon used to be the worked example here — "a third of the starter trips will
+land in this state". That is no longer true: Bird Lisbon publishes 1,753
+stations with bikes in them, and the coverage sweep picked it up. All three
+starters (Chicago, Lisbon, New York) now land on a live panel, which is better
+for a first visit and worse for demonstrating the empty state. Hence the two
+routes above, which are the ones to use when showing it.
 
 **Following stations uses components that already exist.** The nearby stations
 render as a `SuggestionList`, and the ones you follow become `Chip`s. No one-off
@@ -700,27 +728,82 @@ radius is zero.
 
 ### The destination field only offers cities the live layer can serve
 
-A trip can only be made somewhere that publishes a bikeshare feed. The reason is
-the grader: a classmate who types their own city and gets a packing list with a
-dead live panel has tested the half of Assignment 5 that isn't being graded.
-Bounding the destinations means the live layer works on every trip that exists.
+A trip can only be made somewhere that publishes a bikeshare feed **with bikes
+in it**, and whose name the weather lookup resolves to the right place. The
+reason is the grader: a classmate who types their own city and gets a packing
+list beside a dead live panel has tested the half of Assignment 5 that isn't
+being graded.
 
-**The trade-off, stated rather than hidden:** you can no longer make a trip to a
-village in the Alps. That worked in Assignment 4 and its loss is real. It is
+**The trade-off, stated rather than hidden:** you can no longer make a trip to
+a village in the Alps. That worked in Assignment 4 and its loss is real. It is
 chosen because a packing list that works everywhere beside a live panel that
 works nowhere in particular is the worse demonstration.
 
-The list is MobilityData's registry — **938 cities across 47 countries**,
-deduplicated by city, because Paris has six operators and nobody picking a
-destination cares which. `src/app/api/cities/route.ts` serves it, holding the
-~186KB CSV in module scope for an hour rather than re-fetching per keystroke.
+**The list is probed, not taken on trust, and that distinction is the whole
+section.** MobilityData's registry holds 1,277 systems across 938 distinct city
+names. Offering those names directly is what put Pittsburgh in the picker and
+then told the person "No docked bikeshare in Pittsburgh" — a sentence that was
+false twice over. `scripts/verify-systems.mjs` probes every registry entry end
+to end and the ones that survive get a `verified_at` on their `bike_systems`
+row; `/api/cities` offers exactly those. **250 cities, 37 countries** on the run
+committed here.
 
-**Two ways in, and they are not redundant.** Typing filters (`?q=`, prefix
-matches first, so "chi" means Chicago and not Cochin) and a select lists all of
-them (`?all=1`). Typing is faster when you know the city; the list is the only
-way to answer *which cities are there?*, which is the question a first-time
-visitor actually has. Both call `pickDestination`, so either path sets
-`pickedFromList` and submit accepts it.
+Five gates, each added because a real system failed it in a way that reached
+the screen. The script's header is the long version:
+
+| Gate | Rejected | Why it exists |
+| --- | --- | --- |
+| Has `station_information` + `station_status` | 321 | Free-floating fleets publish neither |
+| At least 20 located stations | 391 | Three painted squares is not a system to plan around |
+| Some station reports free docks | 136 | Dott Paris: 12,667 stations, `num_docks_available` on none |
+| Some station has a bike right now | 16 | Denver's system shut down in 2020 and its 119 docks still report 16 empty spaces, forever |
+| The city name geocodes within 100 km of its own stations | 40 | The weather half — see below |
+
+**That last gate is how "no weather data" is caught, and it earns its place
+twice.** `/api/climate` geocodes the destination string, so the test is whether
+that same call lands where the stations are. It throws out registry rows that
+were never cities (`Mecklenburg-Vorpommern`, `Grand Est`, a bare `DE`), and it
+throws out real cities whose names resolve somewhere else entirely:
+
+```
+Cornwall, GB   -> Cornwall, Pennsylvania     5,691 km
+Worcester, GB  -> Worcester, Massachusetts   5,369 km
+Brest, FR      -> Brest, Belarus             2,047 km
+```
+
+Losing Cornwall is a real cost. It is taken because the alternative is a trip
+that confidently packs you for the wrong continent, and `geocode()` takes the
+first hit by design.
+
+**What is deliberately NOT a gate: whether the operator calls them bikes or
+scooters.** That was tried and it cannot be done honestly — `form_factor` in
+`vehicle_types.json` lists both `bicycle` and `scooter` for Divvy, Pogoh, Bird
+and Spin alike, and the dock counts look identical across them. The gates above
+ask whether the data is *useful*, which is the thing that actually shows on the
+page. This replaces the earlier "reject anything that looks like a scooter
+fleet" rule; the Seattle example that rule was written around is still rejected,
+now by the station-count gate.
+
+**`capacity` is not a gate either, and used to be the main one.** It is optional
+in GBFS: Indego in Philadelphia and Metro Bike Share in Los Angeles publish none
+at all. Requiring it rejected 395 systems including both of those. What a
+dock-based system always reports is how many spaces are free.
+
+**Re-running the sweep.** `node scripts/verify-systems.mjs > supabase/migrations/<stamp>_verified_systems.sql`
+then `node --env-file=.env.local scripts/apply-verified.mjs <that file>`. About
+four minutes. The two halves are split because the probe is read-only and
+anybody can diff it, while only the apply needs the service-role key —
+`bike_systems` refuses client writes by policy, exactly like `climate_cache`.
+Nothing is ever deleted: a system that stops passing has `verified_at` cleared,
+which takes it out of the picker and leaves its stations alone. Denver is the
+standing example, and the only unverified row in the table.
+
+**Two ways into the field, and they are not redundant.** Typing filters (`?q=`,
+prefix matches first, so "chi" means Chicago and not Cochin) and a select lists
+all of them (`?all=1`). Typing is faster when you know the city; the list is the
+only way to answer *which cities are there?*, which is the question a
+first-time visitor actually has. Both call `pickDestination`, so either path
+sets `pickedFromList` and submit accepts it.
 
 **`pickedFromList` is what the submit check reads, and it must not be inferred
 from anything else.** The first version gated the suggestions on `climate` —
@@ -730,8 +813,29 @@ refused the trip for not picking from a list that had never appeared. The flag
 is set only by `pickDestination` and cleared by typing. Keep it that way.
 
 The select is `Field.tsx`'s `Select`: a native control scrolls, type-aheads and
-works on a phone for free, and 938 `<option>`s is a smaller payload than any
+works on a phone for free, and 250 `<option>`s is a smaller payload than any
 widget that would replace it.
+
+### GBFS 3.0 renamed more than names
+
+Three fields, found one at a time, each one presenting as a different feature
+being broken. If a 3.0 system ever looks empty again, start here.
+
+| 2.x | 3.0 | What it broke |
+| --- | --- | --- |
+| `name: "Temperance St"` | `name: [{ text, language }]` | Every Toronto station displayed as a numeric id — 1,075 of them |
+| `num_bikes_available` | `num_vehicles_available` | Bike counts stored as null, so Pittsburgh, Toronto, Madrid and bicimad all read as "no bikeshare here" |
+| `last_reported: 1762191600` | `last_reported: "2026-11-03T17:28:27Z"` | No station in a 3.0 feed had ever reported, so freshness could not be judged |
+
+`_shared/gbfs.ts` reads both generations for all three. The second one was the
+expensive one: it was rejecting **225 systems** from the coverage sweep, which
+is most of the difference between offering 177 cities and offering 250.
+
+**Ebike counts stay null on 3.0 feeds, deliberately.** 3.0 moved the breakdown
+into `vehicle_types_available`, keyed by ids whose meaning lives in a third feed
+(`vehicle_types.json`), so working out which are electric costs another fetch
+per system. Null is honest; guessing from id names like `EFIT` would not be, and
+the UI already treats a missing ebike count as "not published" rather than zero.
 
 ### Places you're watching, and the itinerary that isn't here
 
@@ -892,13 +996,15 @@ No workspaces, no `apps/` restructure. `supabase/` already sits beside `src/`:
 ```
 wanderlist2/
 ├── src/                     ← Next.js, deploys to Vercel
+├── scripts/                 ← Node, run by hand. Not shipped anywhere.
+│   ├── verify-systems.mjs   ← probes the GBFS registry, emits a migration
+│   └── apply-verified.mjs   ← writes that migration's rows (service role)
 ├── supabase/
 │   ├── migrations/          ← 7 from A4, plus A5's
-│   ├── functions/
-│   │   ├── _shared/         ← underscore: not deployed as a function
-│   │   └── poll-stations/
-│   │       └── index.ts     ← Deno. Deploys to Supabase.
-│   └── config.toml
+│   └── functions/
+│       ├── _shared/         ← underscore: not deployed as a function
+│       └── poll-stations/
+│           └── index.ts     ← Deno. Deploys to Supabase.
 └── tsconfig.json
 ```
 

@@ -1,43 +1,31 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { supabaseForRequest } from "@/lib/supabase-server";
 
 /**
- * Cities that have a bikeshare feed, for the destination field to offer.
+ * The cities a trip can be made to.
  *
- * A trip can only be made to somewhere the live layer will actually work, so
- * the destination field has to know which places those are before the trip
- * exists. That list is MobilityData's registry: **945 cities across 47
- * countries**, published as a CSV.
+ * A destination has to work in both halves of the app — a live bikeshare feed
+ * with bikes in it, and weather for the right place — so the field can only
+ * offer cities where both are known to hold. That list is the verified half of
+ * `bike_systems`: rows carrying a `verified_at`, stamped by
+ * `scripts/verify-systems.mjs` after probing each feed end to end.
  *
- * GET /api/cities?q=chi → { cities: [{ city, region, country }] }
+ * GET /api/cities?q=chi  → the eight best matches, for typing
+ * GET /api/cities?all=1  → every city, for the browse list
  *
- * The registry is ~186KB and changes about as often as a bikeshare system
- * opens, so it is held in module scope for an hour rather than re-fetched per
- * keystroke. A cold serverless instance pays for it once.
+ * **This used to read MobilityData's registry CSV directly, and it was wrong
+ * to.** The registry lists 1,277 systems; 938 distinct city names. Most of
+ * those cities cannot be served: the feed is free-floating, or dead, or the
+ * "Location" column holds "Mecklenburg-Vorpommern" rather than a city. Offering
+ * them is how a trip to Pittsburgh ended up on a page reading "No docked
+ * bikeshare in Pittsburgh" — which was itself a lie, since Pogoh is real and
+ * the worker simply could not read its GBFS 3.0 field names. The registry is
+ * still where the list comes from; it is just probed first now, by the script,
+ * rather than trusted per keystroke.
  */
 
-const REGISTRY =
-  "https://raw.githubusercontent.com/MobilityData/gbfs/master/systems.csv";
-const TTL_MS = 60 * 60 * 1000;
-
 export type CityOption = { city: string; region: string; country: string };
-
-let cache: { at: number; cities: CityOption[] } | null = null;
-
-function splitRow(line: string): string[] {
-  const out: string[] = [];
-  let cur = "";
-  let quoted = false;
-  for (const ch of line) {
-    if (ch === '"') quoted = !quoted;
-    else if (ch === "," && !quoted) {
-      out.push(cur.trim());
-      cur = "";
-    } else cur += ch;
-  }
-  out.push(cur.trim());
-  return out;
-}
 
 /** Accents off, lowercase — the registry writes "Montréal", people type "Montreal". */
 function norm(s: string): string {
@@ -48,63 +36,46 @@ function norm(s: string): string {
     .trim();
 }
 
-async function cities(): Promise<CityOption[]> {
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.cities;
-
-  const res = await fetch(REGISTRY, { signal: AbortSignal.timeout(20_000) });
-  if (!res.ok) throw new Error(`registry ${res.status}`);
-  const lines = (await res.text()).split(/\r?\n/).filter(Boolean);
-  const head = splitRow(lines[0]!);
-  const iLoc = head.indexOf("Location");
-  const iCountry = head.indexOf("Country Code");
-
-  /* One entry per city, not per system: Paris has six operators and the
-     person picking a destination does not care which. */
-  const seen = new Map<string, CityOption>();
-  for (const line of lines.slice(1)) {
-    const cells = splitRow(line);
-    const location = cells[iLoc] ?? "";
-    if (!location) continue;
-    const [city, ...rest] = location.split(",").map((p) => p.trim());
-    if (!city) continue;
-    const key = norm(city);
-    if (seen.has(key)) continue;
-    seen.set(key, {
-      city,
-      region: rest.join(", "),
-      country: cells[iCountry] ?? "",
-    });
-  }
-
-  const list = [...seen.values()].sort((a, b) => a.city.localeCompare(b.city));
-  cache = { at: Date.now(), cities: list };
-  return list;
-}
-
 export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "signed-out" }, { status: 401 });
   }
 
+  const supabase = await supabaseForRequest();
+  if (!supabase) {
+    return NextResponse.json({ error: "unavailable" }, { status: 503 });
+  }
+
   const params = new URL(request.url).searchParams;
   const q = norm(params.get("q") ?? "");
 
-  try {
-    const all = await cities();
-    /* The whole list, for the browse-all picker. 945 entries is a big select
-       and a small payload — far cheaper than paginating something people
-       scroll once. */
-    if (params.get("all")) return NextResponse.json({ cities: all });
-    if (!q) return NextResponse.json({ cities: all.slice(0, 8) });
+  /* 250 rows of three short strings is a few tens of kilobytes. Filtering in
+     JS rather than in SQL keeps accent folding in one place — Postgres would
+     need unaccent installed to agree with the input the browser sends. */
+  const { data, error } = await supabase
+    .from("bike_systems")
+    .select("city, region, country")
+    .not("verified_at", "is", null)
+    .order("city");
 
-    /* Prefix matches first — someone typing "chi" means Chicago, not Cochin. */
-    const starts = all.filter((c) => norm(c.city).startsWith(q));
-    const contains = all.filter(
-      (c) => !norm(c.city).startsWith(q) && norm(c.city).includes(q),
-    );
-    return NextResponse.json({ cities: [...starts, ...contains].slice(0, 8) });
-  } catch {
+  if (error) {
     return NextResponse.json({ error: "unavailable" }, { status: 503 });
   }
+
+  const all: CityOption[] = (data ?? []).map((r) => ({
+    city: r.city,
+    region: r.region ?? "",
+    country: r.country ?? "",
+  }));
+
+  if (params.get("all")) return NextResponse.json({ cities: all });
+  if (!q) return NextResponse.json({ cities: all.slice(0, 8) });
+
+  /* Prefix matches first — someone typing "chi" means Chicago, not Cochin. */
+  const starts = all.filter((c) => norm(c.city).startsWith(q));
+  const contains = all.filter(
+    (c) => !norm(c.city).startsWith(q) && norm(c.city).includes(q),
+  );
+  return NextResponse.json({ cities: [...starts, ...contains].slice(0, 8) });
 }
