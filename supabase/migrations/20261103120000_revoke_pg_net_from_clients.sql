@@ -1,0 +1,36 @@
+-- Try to stop clients calling net.http_post, and record what actually happened.
+--
+-- The security advisor flagged pg_net as installed in the public schema, which
+-- my cron migration caused. The functions net.http_post / http_get /
+-- http_delete are executable by `anon` and `authenticated`, both of which are
+-- reachable with the publishable key that ships to every browser. On the face
+-- of it that is server-side request forgery: make the database fetch any URL,
+-- including addresses only it can reach.
+--
+-- THESE REVOKES ARE A NO-OP, AND THAT IS WORTH KNOWING RATHER THAN HIDING.
+-- The grants belong to `supabase_admin`, so the migration role cannot take
+-- them back:
+--
+--   net schema acl: supabase_admin=UC/supabase_admin, =U/supabase_admin,
+--                   anon=U/supabase_admin, authenticated=U/supabase_admin, ...
+--
+-- The statements run and change nothing. They are kept because the intent
+-- should be visible to the next person reading this directory.
+--
+-- IT IS NOT REACHABLE FROM A CLIENT, WHICH IS WHY THIS IS LEFT AS IT IS.
+-- Tested rather than assumed, with the publishable key:
+--
+--   POST /rest/v1/rpc/http_post                 -> 404 PGRST202, no such
+--                                                  function in `public`
+--   POST /rest/v1/rpc/http_post  Accept-Profile: net
+--                                               -> 406 PGRST106, "Only the
+--                                                  following schemas are
+--                                                  exposed: public,
+--                                                  graphql_public"
+--
+-- So the privilege exists in the database and there is no path to it from a
+-- browser. **The thing that would open it is adding `net` to the project's
+-- exposed schemas** — don't, and if you ever do, revoke these as
+-- supabase_admin first.
+revoke execute on all functions in schema net from anon, authenticated;
+revoke usage  on schema net            from anon, authenticated;
