@@ -55,37 +55,67 @@ somebody looks at it. Bikes come and go in Chicago at 2am.
 Measured before committing to it, not assumed: **2,078 Chicago stations, 72 of which
 changed across two calls 120 seconds apart — 3.5%.** The feed advertises `ttl: 60`.
 
-### Any city, not a list I maintain
+### Every city it offers, probed first
 
 `bike_systems` began as twelve rows typed into a migration, which meant coverage
 was bounded by my typing rather than by what exists — a trip to Toronto was told
 "no bikeshare here", which wasn't true.
 
-A city nobody has visited now looks itself up. `/api/find-system` reads
-[MobilityData's registry](https://github.com/MobilityData/gbfs/blob/master/systems.csv)
-of every GBFS system in the world — **1,277 of them** — follows the system's
-auto-discovery document to its station feeds, and writes the row. Once; after
-that it is cached like any other. `/api/seed-city` then loads the stations.
+The opposite also failed. Letting people type any city and looking it up on
+demand sent someone to Pittsburgh and showed them "No docked bikeshare in
+Pittsburgh" — false twice over, and the reason why is the interesting part
+below. **A destination now has to be a city where both halves of the app
+work**, and the list of those is derived rather than typed:
+`scripts/verify-systems.mjs` probes all **1,277 systems** in
+[MobilityData's registry](https://github.com/MobilityData/gbfs/blob/master/systems.csv),
+end to end, and stamps the survivors. **242 cities, 34 countries.**
 
-Three things that had to be got right, each found by testing rather than
-reasoning:
+The cost is stated rather than hidden: you can no longer make a trip to a
+village in the Alps, and that worked before. It is chosen because a packing
+list that works everywhere beside a live panel that works nowhere in
+particular is the worse thing to hand someone.
 
-**Two feed generations.** GBFS 1.x nests feeds under a language key, 3.x puts
-them on `data` directly. 3.0 also changed `name` from a string to a localised
-array, which is why Toronto's first load showed 1,075 stations called "7713" and
-"7599". Both shapes are read now.
+Six gates, every one of them added because a real system failed it in a way
+that reached the screen:
 
-**Several operators per city.** The registry lists them all — Paris has six.
-Scooter fleets publish `station_status` too, where a "station" is a painted
-square: Dott Paris reports 12,667 of them with no dock capacity at all.
+| Gate | Rejected | Found by |
+| --- | --- | --- |
+| Publishes `station_information` + `station_status` | 321 | Free-floating fleets publish neither |
+| At least 20 located stations | 391 | Three painted parking squares is not a system |
+| Some station reports free docks | 136 | Dott Paris: 12,667 stations, dock counts on none |
+| Some station has a bike in it right now | 16 | Denver's system shut in 2020; its 119 docks still report sixteen empty spaces, permanently |
+| City name geocodes within 100 km of its own stations | 40 | The weather half — see below |
+| The name is a place, not a country | 8 | Switzerland's system has 12,563 stations and "Switzerland" is not a destination |
 
-**Docks without bikes.** Capacity alone isn't enough. Denver's docked system shut
-down in 2020 but its 119 station records survive, each reporting sixteen empty
-spaces, permanently. So a candidate also has to have **at least one bike
-somewhere, right now** — a real system at four in the morning still does.
+**The weather gate is the one worth explaining.** `/api/climate` geocodes the
+destination string, so the test is whether that same call lands where the
+stations are. It throws out registry rows that were never cities —
+`Mecklenburg-Vorpommern`, a bare `DE` — and, less obviously, real cities whose
+names resolve somewhere else entirely: Cornwall GB to Cornwall, Pennsylvania,
+5,691 km away; Brest FR to Brest, Belarus. Losing Cornwall is a real cost,
+taken because the alternative is packing someone for the wrong continent.
 
-Feeds that answer 403, as Vélib' and Lime do, are skipped rather than failing the
-city.
+**GBFS 3.0 renamed three things, and each presented as a different feature
+being broken.** `name` became a localised array, which is why Toronto's first
+load showed 1,075 stations called "7713". `num_bikes_available` became
+`num_vehicles_available`, so every 3.0 system stored a null bike count — that
+is the Pittsburgh bug, and it was rejecting 225 systems from the sweep.
+`last_reported` became an RFC3339 string instead of unix seconds, so nothing in
+a 3.0 feed had ever reported. All three are read in both generations now.
+
+**`capacity` is not one of the gates, and used to be the main one.** It is
+optional in GBFS: Indego in Philadelphia and Metro Bike Share in Los Angeles
+publish none at all, and requiring it rejected 395 systems including both. What
+a dock-based system always reports is how many spaces are free.
+
+**Bikes versus scooters is not a gate either**, because it cannot be decided
+honestly — `form_factor` lists both for Divvy, Pogoh, Bird and Spin alike, and
+their dock counts are indistinguishable. The gates above ask whether the data is
+useful, which is what actually shows on the page.
+
+Feeds that answer 403, as Vélib' and Lime do, are skipped rather than failing
+the city. Forty more answer 429 even when probed one at a time, slowly; those
+publishers are refusing us, not reacting to load.
 
 ### The worker
 
