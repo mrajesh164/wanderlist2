@@ -10,11 +10,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Wanderlist
 
-Packing lists for your favorite destinations. You keep the trips you take again in one place
+Day plans and packing lists for the trips you take again. You keep them in one place
 — "Thanksgiving at my parents'", "Ann Arbor for a game weekend", "Lisbon in March"
-— and each time one comes around, the list is already built, already corrected by
-the last time you took it, and already adjusted for how long you're going and what
-the weather does there that month.
+— and each time one comes around, the days are already planned against what the
+weather does on those dates, the list is already built and already corrected by the
+last time you took it, and each day shows **the bikes free at its nearest dock right
+now**.
+
+**It is not only a packing app any more, and the three parts are one idea.** The
+destination and the dates decide what the weather will do; the weather decides where
+each day goes; where each day goes decides which dock matters. The live layer is not a
+widget beside the list — it is the last link in that chain, and it is the only part that
+can answer *can I actually get there in the next ten minutes*.
 
 Course: Design, Build, Ship · MPCS 51238 · **Assignment 5 (Live Data System)**.
 Due Tuesday, November 3 2026, 5:30 PM. This repository starts from the finished
@@ -38,7 +45,7 @@ by reading a tour.
 
 **2. The core task** — written as one sentence:
 
-> I add a trip → it builds a packing list from the dates and the destination → I check things off as I pack → I come back next time and it's already corrected from last trip.
+> I add a trip → it plans each day from the destination and the weather, builds a packing list to match, and shows the bikes free at each day's stop right now → I check things off as I pack → I come back next time and it's already corrected.
 
 **3. Coming back** — three reasons, on three clocks:
 - *Mid-pack:* packing happens over several evenings, so a part-packed list is a

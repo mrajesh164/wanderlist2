@@ -1,12 +1,13 @@
 # Wanderlist
 
-Packing lists for your favorite destinations.
+Day plans and packing lists for the trips you take again.
 
 You keep the trips you take again in one place — Thanksgiving at your parents', a
-conference in New York, Lisbon in March. Each one builds its own packing list from your
-dates and the weather where you're going *that month*. Afterwards you say what you didn't
-need and what you wished you'd brought, and the next time you pack that trip, the list
-starts already corrected.
+conference in New York, Lisbon in March. Each one plans its own days from the weather on
+those dates — the museum when it will rain, the park when it won't — builds a packing
+list to match, and shows **how many bikes are free at the nearest dock to each day's
+stop, right now**. Afterwards you say what you didn't need and what you wished you'd
+brought, and the next time you take that trip, it all starts already corrected.
 
 Built for **Design, Build, Ship · MPCS 51238**. Assignment 3 designed the flows and the
 interface; **Assignment 4 (Full Stack App)** put accounts, a database and one external API
@@ -128,9 +129,9 @@ Functions run on **Deno**, so `"supabase"` is in `tsconfig.json`'s `exclude` —
 
 ## The core task, as one sentence
 
-> I add a trip → it builds a packing list from the dates and the destination →
-> I check things off as I pack → I come back next time and it's already corrected from
-> last trip.
+> I add a trip → it plans each day from the destination and the weather, builds a
+> packing list to match, and shows the bikes free at each day's stop right now →
+> I check things off as I pack → I come back next time and it's already corrected.
 
 ## The three flows
 
