@@ -1,0 +1,249 @@
+{
+ "last_updated": "2026-11-03T18:53:22Z",
+ "ttl": 6,
+ "data": {
+  "stations": [
+   {
+    "station_id": "7000",
+    "num_vehicles_available": 6,
+    "num_vehicles_disabled": 0,
+    "num_docks_available": 41,
+    "num_docks_disabled": 0,
+    "last_reported": "2026-11-03T18:53:09.67Z",
+    "is_installed": true,
+    "is_renting": true,
+    "is_returning": true,
+    "vehicle_docks_available": [
+     {
+      "vehicle_type_ids": [
+       "ICONIC",
+       "BOOST",
+       "EFIT",
+       "ASTRO"
+      ],
+      "count": 41
+     }
+    ],
+    "vehicle_types_available": [
+     {
+      "vehicle_type_id": "BOOST",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "ICONIC",
+      "count": 6
+     },
+     {
+      "vehicle_type_id": "ASTRO",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "EFIT",
+      "count": 0
+     }
+    ]
+   },
+   {
+    "station_id": "7001",
+    "num_vehicles_available": 2,
+    "num_vehicles_disabled": 6,
+    "num_docks_available": 15,
+    "num_docks_disabled": 0,
+    "last_reported": "2026-11-03T18:51:21.522Z",
+    "is_installed": true,
+    "is_renting": true,
+    "is_returning": true,
+    "vehicle_docks_available": [
+     {
+      "vehicle_type_ids": [
+       "ICONIC",
+       "BOOST",
+       "EFIT",
+       "ASTRO"
+      ],
+      "count": 15
+     }
+    ],
+    "vehicle_types_available": [
+     {
+      "vehicle_type_id": "BOOST",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "ICONIC",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "ASTRO",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "EFIT",
+      "count": 2
+     }
+    ]
+   },
+   {
+    "station_id": "7002",
+    "num_vehicles_available": 11,
+    "num_vehicles_disabled": 0,
+    "num_docks_available": 8,
+    "num_docks_disabled": 0,
+    "last_reported": "2026-11-03T18:51:20.904Z",
+    "is_installed": true,
+    "is_renting": true,
+    "is_returning": true,
+    "vehicle_docks_available": [
+     {
+      "vehicle_type_ids": [
+       "ICONIC",
+       "BOOST",
+       "EFIT",
+       "ASTRO"
+      ],
+      "count": 8
+     }
+    ],
+    "vehicle_types_available": [
+     {
+      "vehicle_type_id": "BOOST",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "ICONIC",
+      "count": 1
+     },
+     {
+      "vehicle_type_id": "ASTRO",
+      "count": 1
+     },
+     {
+      "vehicle_type_id": "EFIT",
+      "count": 9
+     }
+    ]
+   },
+   {
+    "station_id": "7003",
+    "num_vehicles_available": 0,
+    "num_vehicles_disabled": 0,
+    "num_docks_available": 15,
+    "num_docks_disabled": 0,
+    "last_reported": "2026-11-03T18:53:14.858Z",
+    "is_installed": true,
+    "is_renting": true,
+    "is_returning": true,
+    "vehicle_docks_available": [
+     {
+      "vehicle_type_ids": [
+       "ICONIC",
+       "BOOST",
+       "EFIT",
+       "ASTRO"
+      ],
+      "count": 15
+     }
+    ],
+    "vehicle_types_available": [
+     {
+      "vehicle_type_id": "BOOST",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "ICONIC",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "ASTRO",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "EFIT",
+      "count": 0
+     }
+    ]
+   },
+   {
+    "station_id": "7004",
+    "num_vehicles_available": 31,
+    "num_vehicles_disabled": 3,
+    "num_docks_available": 1,
+    "num_docks_disabled": 0,
+    "last_reported": "2026-11-03T18:52:50.638Z",
+    "is_installed": true,
+    "is_renting": true,
+    "is_returning": true,
+    "vehicle_docks_available": [
+     {
+      "vehicle_type_ids": [
+       "ICONIC",
+       "BOOST",
+       "EFIT",
+       "ASTRO"
+      ],
+      "count": 1
+     }
+    ],
+    "vehicle_types_available": [
+     {
+      "vehicle_type_id": "BOOST",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "ICONIC",
+      "count": 26
+     },
+     {
+      "vehicle_type_id": "ASTRO",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "EFIT",
+      "count": 5
+     }
+    ]
+   },
+   {
+    "station_id": "7005",
+    "num_vehicles_available": 22,
+    "num_vehicles_disabled": 1,
+    "num_docks_available": 0,
+    "num_docks_disabled": 0,
+    "last_reported": "2026-11-03T18:53:15.967Z",
+    "is_installed": true,
+    "is_renting": true,
+    "is_returning": true,
+    "vehicle_docks_available": [
+     {
+      "vehicle_type_ids": [
+       "ICONIC",
+       "BOOST",
+       "EFIT",
+       "ASTRO"
+      ],
+      "count": 0
+     }
+    ],
+    "vehicle_types_available": [
+     {
+      "vehicle_type_id": "BOOST",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "ICONIC",
+      "count": 20
+     },
+     {
+      "vehicle_type_id": "ASTRO",
+      "count": 0
+     },
+     {
+      "vehicle_type_id": "EFIT",
+      "count": 2
+     }
+    ]
+   }
+  ]
+ },
+ "version": "3.0"
+}

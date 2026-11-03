@@ -41,10 +41,17 @@ nothing everywhere else, and the only keyless way to generate places anywhere re
 things like "Bombing of Barcelona". **Naming where you're staying works in any city**, and
 it is a better anchor than a city centre, which is nobody's hotel.
 
+![How a bike arriving at a dock reaches the page](docs/data-flow.svg)
+
 ```
 GBFS feed  ──every 30s──▶  Edge Function  ──only changed rows──▶  Postgres  ──Realtime──▶  Page
-  (Divvy)                   (Supabase Cron)                       (Supabase)              (Vercel)
 ```
+
+Drawn before the worker was written, and it has held: every box is still one
+hop and nothing in the chain can be skipped. Two dashed paths on the chart are
+the parts that are easy to miss — `station_follows` is what decides which
+systems get fetched at all, and `worker_runs` is the only thing that lets the
+page tell **stale** from **down**.
 
 ### Why bikeshare
 
@@ -116,6 +123,38 @@ useful, which is what actually shows on the page.
 Feeds that answer 403, as Vélib' and Lime do, are skipped rather than failing
 the city. Forty more answer 429 even when probed one at a time, slowly; those
 publishers are refusing us, not reacting to load.
+
+### What the tests check
+
+Two of them, and they check different kinds of thing.
+
+**`npm test` — what the worker writes.** `node:test` and `node:assert`, no
+framework and no new dependency. It runs the parsing and diffing against
+saved slices of two real responses in
+`supabase/functions/_shared/__fixtures__/`: six stations from Divvy on GBFS
+**2.3** and six from Bike Share Toronto on **3.0**, captured 3 November 2026.
+Two generations rather than one deliberately — every bug this code has
+shipped was a 3.0 rename that a 2.x-shaped reader turned into a silent null,
+and a single-generation fixture could not have caught any of them. Fifteen
+cases, covering:
+
+- 2.x `num_bikes_available` and unix seconds; **3.0 `num_vehicles_available`
+  and an RFC3339 string**; 3.0's localised `name` array
+- ebike counts staying null on 3.0 rather than being guessed from vehicle-type ids
+- the write rule: a feed that repeats itself writes **nothing**, an unfollowed
+  station that moves writes nothing, a followed station the feed never mentions
+  writes nothing, a followed station with no stored row writes once
+- a malformed station losing its own fields and not the whole run
+- the feed-URL guard refusing loopback, private ranges and non-http schemes
+
+Watched failing, not just passing: reverting the one line that reads
+`num_vehicles_available` turns 15 green into 13 green and 2 red, and the red
+one is the Pittsburgh bug by name.
+
+**`npm run test:e2e` — that row-level security actually fences two accounts
+apart.** A real browser, two real Clerk sessions, one real Postgres. Also
+watched failing: with `using (true)` on the trips select policy, user B's
+board shows 1 of user A's trips where the test expects 0.
 
 ### The worker
 

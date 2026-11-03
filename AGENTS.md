@@ -1031,6 +1031,53 @@ the migration says so rather than implying otherwise.
 
 **What would open it is adding `net` to the exposed schemas.** Don't.
 
+### The two tests, and what each is evidence of
+
+Neither is a formality and they are evidence of different things, so don't
+collapse them into one command.
+
+**`npm test` — what the worker writes.** `node --experimental-strip-types
+--test` over `supabase/functions/_shared/gbfs.test.ts`. **No test framework
+and no new dependency**, which is the whole reason it is `node:test`: the
+brief's package rule is real and a runner would have been the fourth thing
+asking to be installed. The fixtures are verbatim slices of two live
+responses, six stations each, Divvy on GBFS 2.3 and Toronto on 3.0.
+
+**Keep both generations.** A fixture from one generation proves almost
+nothing here — all three bugs this file has shipped were 3.0 renames that a
+2.x-shaped reader turned into a silent null, and a 2.x-only fixture is
+exactly the thing that was green while Pittsburgh said "no bikeshare". The
+3.0 tests assert `num_bikes_available === undefined` on the raw fixture
+first, so the test fails loudly if someone ever "helpfully" normalises the
+saved JSON.
+
+It was watched failing: revert the `?? num(s?.num_vehicles_available)` and 15
+pass becomes 13 pass, 2 fail.
+
+**`npm run test:e2e` — that RLS fences two accounts apart.** A real browser,
+two real Clerk sessions, real Postgres. Also watched failing, by loosening
+the trips select policy to `using (true)`.
+
+**That test creates trips through the form, so the destination gate reaches
+it.** It typed "Reykjavik" and submitted until the gate landed, and then
+quietly failed. It now picks from the suggestion list. If you change how a
+destination is chosen, this test is the thing that breaks, and it is supposed
+to.
+
+### A chart that is in the repo, not only in a conversation
+
+`docs/data-flow.svg`, linked from the README. The brief asks for a high-level
+chart of the data flow made before the code, and one was — in conversation,
+which is not somewhere a grader can look. Drawn in the Café Terrace palette
+like everything else: zero radius, hard offsets, the accent on the three
+arrow labels only.
+
+Two dashed paths on it are the parts worth pointing at, because they are the
+ones that are not obvious from the four boxes: `station_follows` decides which
+systems get fetched at all, and `worker_runs` is the only thing that lets the
+page tell **stale** from **down**. If the flow changes, change the SVG — a
+chart that has drifted is worse than no chart.
+
 ### Repo layout — one repo, two runtimes
 
 No workspaces, no `apps/` restructure. `supabase/` already sits beside `src/`:
@@ -1038,6 +1085,10 @@ No workspaces, no `apps/` restructure. `supabase/` already sits beside `src/`:
 ```
 wanderlist2/
 ├── src/                     ← Next.js, deploys to Vercel
+├── docs/
+│   └── data-flow.svg        ← the chart, linked from the README
+├── e2e/
+│   └── isolation.spec.ts    ← Playwright: two accounts, fenced apart
 ├── scripts/                 ← Node, run by hand. Not shipped anywhere.
 │   ├── verify-systems.mjs   ← probes the GBFS registry, emits a migration
 │   └── apply-verified.mjs   ← writes that migration's rows (service role)
@@ -1045,6 +1096,9 @@ wanderlist2/
 │   ├── migrations/          ← 7 from A4, plus A5's
 │   └── functions/
 │       ├── _shared/         ← underscore: not deployed as a function
+│       │   ├── gbfs.ts
+│       │   ├── gbfs.test.ts ← node:test. `npm test`
+│       │   └── __fixtures__/ ← saved slices of two real feeds
 │       └── poll-stations/
 │           └── index.ts     ← Deno. Deploys to Supabase.
 └── tsconfig.json

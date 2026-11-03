@@ -2,7 +2,14 @@
  * Reading a GBFS feed, and working out what actually changed.
  *
  * Deliberately free of Deno globals, `npm:` specifiers and remote imports, so
- * it stays safe for the Next.js side to import. See AGENTS.md: tsconfig's
+ * it stays safe for the Next.js side to import -- `/api/find-system` does, for
+ * `fetchableFeedUrl`, and `next build` type-checks it as a result.
+ *
+ * Everything here is pure, which is the point: the worker talks to the network
+ * and to Postgres, and this is the part that decides *what gets written*.
+ * `gbfs.test.ts` runs it against saved slices of two real feeds -- Divvy on
+ * GBFS 2.3 and Bike Share Toronto on 3.0 -- because every bug this file has
+ * shipped was a 3.0 rename that a 2.x-shaped reader turned into a silent null. See AGENTS.md: tsconfig's
  * `exclude` only drops files from the initial glob, and anything src/ imports
  * gets pulled back into the program and type-checked anyway.
  *

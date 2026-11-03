@@ -1,0 +1,88 @@
+{
+ "data": {
+  "stations": [
+   {
+    "station_id": "a3b0fae6-a135-11e9-9cda-0a87ae2ba916",
+    "name": "Glenwood Ave & Touhy Ave",
+    "short_name": "CHI01143",
+    "lon": -87.666058,
+    "lat": 42.012701,
+    "capacity": 15,
+    "rental_uris": {
+     "android": "https://chi.lft.to/lastmile_qr_scan",
+     "ios": "https://chi.lft.to/lastmile_qr_scan"
+    },
+    "is_charging": false
+   },
+   {
+    "station_id": "2007796988006173238",
+    "name": "Melvina Ave & Giddings Ave",
+    "short_name": "CHI01954",
+    "lon": -87.78202,
+    "lat": 41.96648,
+    "capacity": 8,
+    "rental_uris": {
+     "android": "https://chi.lft.to/lastmile_qr_scan",
+     "ios": "https://chi.lft.to/lastmile_qr_scan"
+    },
+    "is_charging": false
+   },
+   {
+    "station_id": "a3a528d0-a135-11e9-9cda-0a87ae2ba916",
+    "name": "Stony Island Ave & 64th St",
+    "short_name": "CHI00557",
+    "lon": -87.586647,
+    "lat": 41.778881,
+    "capacity": 11,
+    "rental_uris": {
+     "android": "https://chi.lft.to/lastmile_qr_scan",
+     "ios": "https://chi.lft.to/lastmile_qr_scan"
+    },
+    "is_charging": false
+   },
+   {
+    "station_id": "a3b23785-a135-11e9-9cda-0a87ae2ba916",
+    "name": "Ashland Ave & 63rd St",
+    "short_name": "CHI00682",
+    "lon": -87.664843,
+    "lat": 41.779374,
+    "capacity": 11,
+    "rental_uris": {
+     "android": "https://chi.lft.to/lastmile_qr_scan",
+     "ios": "https://chi.lft.to/lastmile_qr_scan"
+    },
+    "is_charging": false
+   },
+   {
+    "station_id": "2246219009938486686",
+    "name": "Arrington Lagoon",
+    "short_name": "CHI02391",
+    "lon": -87.6738773,
+    "lat": 42.046434,
+    "region_id": "35",
+    "capacity": 6,
+    "rental_uris": {
+     "android": "https://chi.lft.to/lastmile_qr_scan",
+     "ios": "https://chi.lft.to/lastmile_qr_scan"
+    },
+    "is_charging": false
+   },
+   {
+    "station_id": "a3a80512-a135-11e9-9cda-0a87ae2ba916",
+    "name": "Damen Ave & Cortland St",
+    "short_name": "CHI00388",
+    "lon": -87.677335,
+    "lat": 41.915983,
+    "capacity": 19,
+    "rental_uris": {
+     "android": "https://chi.lft.to/lastmile_qr_scan",
+     "ios": "https://chi.lft.to/lastmile_qr_scan"
+    },
+    "is_charging": false
+   }
+  ]
+ },
+ "last_updated": 1793731914,
+ "ttl": 60,
+ "version": "2.3"
+}
