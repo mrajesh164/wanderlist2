@@ -68,7 +68,7 @@ export function StationBoard({
   const [saving, setSaving] = useState(false);
   /** Geocoder candidates for what's being typed, so you can see it will work. */
   const [candidates, setCandidates] = useState<
-    { label: string; lat: number; lon: number }[]
+    { label: string; lat: number; lon: number; kind?: string }[]
   >([]);
   const [error, setError] = useState<string | undefined>();
   /* Only the setter matters: the value is never read, it exists to force the
@@ -255,12 +255,19 @@ export function StationBoard({
   }, [supabase, system, session, loadRuns]);
 
   /**
-   * Show what the geocoder will actually match, as they type.
+   * Suggest as they type, from two places at once.
    *
-   * Without this you type a neighbourhood, press Add, and find out only then
-   * whether it resolved — and if it matched the wrong "Chinatown" you have no
-   * way to tell. The trip form's destination field already works this way; the
-   * same affordance belongs here.
+   * The geocoder alone is not a type-ahead: Open-Meteo matches whole names,
+   * not prefixes. Measured — "Wick", "Wicke" and "Wicker" all return ten
+   * results and *none* of them within 60km of Chicago, while "Wicker Park"
+   * returns three and all three are right. So a dropdown fed only by the
+   * geocoder stays empty until the name is complete, which is exactly when
+   * you no longer need it.
+   *
+   * The station table does prefix-match, locally, and station names are
+   * themselves places — "Damen Ave & Wicker Park Ave" is a perfectly good
+   * answer to "where are you staying". So both are offered: the docks whose
+   * names contain what you typed, and the neighbourhood once it resolves.
    */
   useEffect(() => {
     const q = draft.trim();
@@ -270,30 +277,47 @@ export function StationBoard({
       return;
     }
     let cancelled = false;
+
     const t = setTimeout(async () => {
+      const centre = { lat: system.lat ?? 0, lon: system.lon ?? 0 };
+      const out: { label: string; lat: number; lon: number; kind: string }[] = [];
+
+      /* Local first, because it answers from the third keystroke. */
+      const { data: hits } = await supabase
+        .from("stations")
+        .select("name, lat, lon")
+        .eq("system_slug", system.slug)
+        .ilike("name", `%${q}%`)
+        .limit(4);
+      if (cancelled) return;
+      for (const h of hits ?? []) {
+        if (h.name && h.lat !== null && h.lon !== null) {
+          out.push({ label: h.name, lat: h.lat, lon: h.lon, kind: "dock" });
+        }
+      }
+
+      /* Then the geocoder, for neighbourhoods and addresses it can place. */
       try {
         const res = await fetch(
-          `/api/place?q=${encodeURIComponent(q)}&lat=${system.lat ?? 0}&lon=${system.lon ?? 0}`,
+          `/api/place?q=${encodeURIComponent(q)}&lat=${centre.lat}&lon=${centre.lon}`,
         );
-        if (cancelled) return;
-        if (!res.ok) {
-          setCandidates([]);
-          return;
+        if (!cancelled && res.ok) {
+          const { places } = (await res.json()) as {
+            places: { lat: number; lon: number; label: string }[];
+          };
+          for (const pl of places) {
+            if (metresBetween(centre, pl) < 60_000 && out.length < 7) {
+              out.push({ ...pl, kind: "place" });
+            }
+          }
         }
-        const { places } = (await res.json()) as {
-          places: { lat: number; lon: number; label: string }[];
-        };
-        /* Only ones actually near this city. A match 3,000km away is not the
-           place they meant, and offering it would be worse than offering
-           nothing. */
-        const centre = { lat: system.lat ?? 0, lon: system.lon ?? 0 };
-        setCandidates(
-          places.filter((pl) => metresBetween(centre, pl) < 60_000).slice(0, 5),
-        );
       } catch {
-        if (!cancelled) setCandidates([]);
+        /* Geocoder unreachable is not a dead end — the local hits stand. */
       }
-    }, 300);
+
+      if (!cancelled) setCandidates(out);
+    }, 250);
+
     return () => {
       cancelled = true;
       clearTimeout(t);
@@ -483,7 +507,14 @@ export function StationBoard({
             getKey={(c) => c.label}
             onPick={(c) => add(c)}
           >
-            {(c) => c.label}
+            {(c) => (
+              <span className="flex items-baseline justify-between gap-3">
+                <span>{c.label}</span>
+                <span className="text-muted">
+                  {c.kind === "dock" ? "dock" : "area"}
+                </span>
+              </span>
+            )}
           </SuggestionList>
 
           <span className="mt-3 flex items-center gap-3">
