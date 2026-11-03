@@ -77,7 +77,10 @@ let inserted = 0;
 for (const row of rows) {
   const existing = slugForCity.get(row.city.toLowerCase());
   if (existing) {
-    const { slug: _ignored, ...rest } = row;
+    /* Everything but the slug: the row a trip already points at keeps its
+       own, since registry System IDs are not stable between runs. */
+    const rest = { ...row };
+    delete rest.slug;
     const { error } = await db.from("bike_systems").update(rest).eq("slug", existing);
     if (error) throw new Error(`${row.city}: ${error.message}`);
     updated++;
