@@ -10,7 +10,13 @@
  */
 
 import type { Conditions } from "./climate";
-import type { Item, ItemCategory, ItemSource } from "./types";
+import type {
+  Item,
+  ItemCategory,
+  ItemSource,
+  KitItem,
+  WhenTag,
+} from "./types";
 
 type Spec = {
   label: string;
@@ -69,10 +75,52 @@ export function monthsSpanned(start: string, end: string): number[] {
  */
 export const LAUNDRY_CAP_DAYS = 10;
 
+/** A weekend is short and lands on one. */
+const WEEKEND_MAX_DAYS = 4;
+/** Past this a trip is "long", which is also where the laundry cap bites. */
+const LONG_MIN_DAYS = LAUNDRY_CAP_DAYS;
+
+/**
+ * Which `WhenTag`s describe this trip.
+ *
+ * Every tag has to be decidable from what a trip already carries — the climate
+ * normals the list is built from, and the dates. That constraint is what keeps
+ * the vocabulary closed: a tag the app can't evaluate would never fire, and an
+ * item filed under it would silently never appear.
+ */
+export function tagsForTrip(
+  conditions: Conditions,
+  days: number,
+  startDate?: string,
+): WhenTag[] {
+  const tags: WhenTag[] = [];
+  if (conditions.band === "freezing" || conditions.band === "cold") tags.push("cold");
+  if (conditions.band === "warm" || conditions.band === "hot") tags.push("hot");
+  if (conditions.wetness === "wet" || conditions.wetness === "some-rain") tags.push("wet");
+
+  if (days <= WEEKEND_MAX_DAYS && startDate) {
+    /* Built with an explicit T00:00:00 like everywhere else in the app: a bare
+       date string parses as UTC midnight, which in any negative offset is the
+       day before, and a Saturday trip would read as a Friday. */
+    const start = new Date(startDate + "T00:00:00");
+    const spans = [...Array(days)].some((_, i) => {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      return d.getDay() === 0 || d.getDay() === 6;
+    });
+    if (spans) tags.push("weekend");
+  }
+  if (days >= LONG_MIN_DAYS) tags.push("long");
+  return tags;
+}
+
 export function buildPackingList(
   conditions: Conditions,
   days: number,
   learned: { drop: string[]; add: string[] } = { drop: [], add: [] },
+  /** Your inventory, so things you've said when you need get added here. */
+  kit: KitItem[] = [],
+  startDate?: string,
 ): Item[] {
   const specs: Spec[] = [];
 
@@ -197,6 +245,25 @@ export function buildPackingList(
   /* --- what you learned last time --- */
   for (const label of learned.add) {
     specs.push({ label, category: "Extras", source: "learned" });
+  }
+
+  /* --- what you've said about your own things ---
+     An item marked "always" goes on every list. One tagged with a condition
+     goes on the lists that match. This is the feedback about weather and
+     scenarios made load-bearing rather than decorative: tag the umbrella
+     "when it rains" once and you stop re-adding it to every wet trip. */
+  const tripTags = new Set(tagsForTrip(conditions, days, startDate));
+  for (const entry of kit) {
+    const matches =
+      entry.alwaysNeeded ||
+      (entry.whenTags ?? []).some((t) => tripTags.has(t));
+    if (!matches) continue;
+    specs.push({
+      label: entry.label,
+      category: entry.category,
+      source: "learned",
+      qty: entry.qty,
+    });
   }
 
   /* De-duplicate by label, keeping the larger quantity, then drop anything the

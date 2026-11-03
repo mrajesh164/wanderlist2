@@ -55,7 +55,7 @@ export function TripForm({
    */
   preset?: Trip;
 }) {
-  const { addTrip } = useTrips();
+  const { addTrip, kit } = useTrips();
   const router = useRouter();
 
   const source = repeatOf ?? preset;
@@ -108,9 +108,10 @@ export function TripForm({
     return {
       days,
       conditions,
-      count: buildPackingList(conditions, days, repeatOf?.learned).length,
+      count: buildPackingList(conditions, days, repeatOf?.learned, kit, startDate)
+        .length,
     };
-  }, [startDate, endDate, climate, needsManualConditions, band, wetness, repeatOf]);
+  }, [startDate, endDate, climate, needsManualConditions, band, wetness, repeatOf, kit]);
 
   function pickDestination(slug: string, city: string) {
     setClimateSlug(slug);
@@ -153,7 +154,7 @@ export function TripForm({
       startDate,
       endDate,
       stayingPlaces: [],
-      items: buildPackingList(conditions, days, repeatOf?.learned),
+      items: buildPackingList(conditions, days, repeatOf?.learned, kit, startDate),
       createdAt: new Date().toISOString(),
       // Carry the corrections forward — this is what makes a repeat cheap.
       learned: repeatOf?.learned ?? { drop: [], add: [] },

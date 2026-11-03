@@ -118,6 +118,26 @@ export type Trip = {
  * a trip. Trips still generate most of the picture; this is for the things you
  * know you have but haven't packed yet.
  */
+/**
+ * When something is needed. Closed vocabulary, and deliberately so: every tag
+ * has to be something the app can decide about a trip on its own.
+ *
+ *   cold / hot / wet   from the climate normals the list is already built from
+ *   weekend / long     from the dates
+ *
+ * A free-text tag would let someone write "beach" and then wonder why it never
+ * fired, because nothing can evaluate it.
+ */
+export type WhenTag = "cold" | "hot" | "wet" | "weekend" | "long";
+
+export const WHEN_TAGS: { tag: WhenTag; label: string }[] = [
+  { tag: "cold", label: "When it's cold" },
+  { tag: "hot", label: "When it's hot" },
+  { tag: "wet", label: "When it rains" },
+  { tag: "weekend", label: "Weekends" },
+  { tag: "long", label: "Long trips" },
+];
+
 export type KitItem = {
   id: string;
   label: string;
@@ -132,6 +152,10 @@ export type KitItem = {
    * `resolveQty` in lib/inventory.ts.
    */
   qty?: number;
+  /** On every trip, regardless of weather or length. */
+  alwaysNeeded?: boolean;
+  /** The conditions that call for it. Empty means "no opinion". */
+  whenTags?: WhenTag[];
   addedAt: string;
 };
 

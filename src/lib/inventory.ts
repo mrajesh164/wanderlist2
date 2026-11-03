@@ -13,7 +13,7 @@
  * place.
  */
 
-import type { ItemCategory, KitItem, Trip } from "./types";
+import type { ItemCategory, KitItem, Trip, WhenTag } from "./types";
 import { phaseOf } from "./trips";
 
 /**
@@ -60,6 +60,10 @@ export type KitEntry = {
   owned: boolean;
   /** Id of the inventory entry, when there is one — lets it be removed. */
   kitId?: string;
+  /** On every trip, regardless of conditions. */
+  alwaysNeeded: boolean;
+  /** Conditions that call for it — see WhenTag. */
+  whenTags: WhenTag[];
   /** Most recent trip it appeared on. */
   lastSeenOn?: string;
 };
@@ -108,6 +112,8 @@ export function buildInventory(trips: Trip[], kit: KitItem[] = []): KitEntry[] {
         yourOwn: false,
         owned: false,
         kitId: undefined,
+        alwaysNeeded: false,
+        whenTags: [],
         lastSeenOn: undefined,
       };
       byLabel.set(key, entry);
@@ -155,6 +161,8 @@ export function buildInventory(trips: Trip[], kit: KitItem[] = []): KitEntry[] {
   for (const own of kit) {
     const entry = touch(own.label, own.category);
     entry.owned = true;
+    entry.alwaysNeeded = own.alwaysNeeded ?? false;
+    entry.whenTags = own.whenTags ?? [];
     entry.kitId = own.id;
     // A category you chose beats one inferred from a trip item.
     entry.category = own.category;

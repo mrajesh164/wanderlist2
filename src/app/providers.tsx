@@ -40,10 +40,11 @@ import {
   insertKitItems,
   insertTrip,
   saveKitQty,
+  saveKitWhen,
   saveTrip,
   type Snapshot,
 } from "@/lib/trips-db";
-import type { Item, ItemCategory, KitItem, Trip } from "@/lib/types";
+import type { Item, ItemCategory, KitItem, Trip, WhenTag } from "@/lib/types";
 
 /** One line of an inventory add: a label, and a count only if you gave one. */
 export type KitAddition = { label: string; qty?: number };
@@ -79,6 +80,13 @@ type TripsContextValue = {
    * without a separate "this is mine" step.
    */
   setKitQty: (label: string, category: ItemCategory, qty: number) => void;
+  /** When a thing is needed: on every trip, and/or under given conditions. */
+  setKitWhen: (
+    label: string,
+    category: ItemCategory,
+    alwaysNeeded: boolean,
+    whenTags: WhenTag[],
+  ) => void;
   removeKitItem: (id: string) => void;
   resetEverything: () => void;
 };
@@ -426,6 +434,51 @@ export function TripsProvider({ children }: { children: React.ReactNode }) {
    * inference into a fact, so this creates the entry rather than refusing. That
    * single gesture is the whole "claim this item" flow.
    */
+  /**
+   * Record when an item is needed.
+   *
+   * Creates the KitItem when the label only exists as a derived row, exactly
+   * as setKitQty does — saying "I need this when it rains" is itself the claim
+   * that it is yours, so there is no separate step.
+   */
+  const setKitWhen = useCallback(
+    (
+      label: string,
+      category: ItemCategory,
+      alwaysNeeded: boolean,
+      whenTags: WhenTag[],
+    ) => {
+      const prev = stateRef.current;
+      const key = label.toLowerCase();
+      const known = prev.kit.find((k) => k.label.toLowerCase() === key);
+
+      if (known) {
+        apply({
+          ...prev,
+          kit: prev.kit.map((k) =>
+            k.label.toLowerCase() === key
+              ? { ...k, alwaysNeeded, whenTags }
+              : k,
+          ),
+        });
+        void write((db) => saveKitWhen(db, known.id, alwaysNeeded, whenTags));
+        return;
+      }
+
+      const fresh: KitItem = {
+        id: crypto.randomUUID(),
+        label,
+        category,
+        alwaysNeeded,
+        whenTags,
+        addedAt: new Date().toISOString(),
+      };
+      apply({ ...prev, kit: [...prev.kit, fresh] });
+      void write((db, uid) => insertKitItems(db, [fresh], uid));
+    },
+    [apply, write],
+  );
+
   const setKitQty = useCallback(
     (label: string, category: ItemCategory, qty: number) => {
       const clamped = clampQty(qty);
@@ -496,6 +549,7 @@ export function TripsProvider({ children }: { children: React.ReactNode }) {
       kit,
       addKitItems,
       setKitQty,
+      setKitWhen,
       removeKitItem,
       resetEverything,
     }),
@@ -513,6 +567,7 @@ export function TripsProvider({ children }: { children: React.ReactNode }) {
       removeItem,
       addKitItems,
       setKitQty,
+      setKitWhen,
       removeKitItem,
       resetEverything,
     ],

@@ -6,8 +6,13 @@ import { useTrips } from "@/app/providers";
 import { Badge, Label, SectionRule } from "@/components/Card";
 import { AddKitForm } from "@/components/AddKitForm";
 import { QuietAction, SegmentedControl, Stepper } from "@/components/Controls";
+import { WhenNeeded } from "@/components/WhenNeeded";
 import { styleFor } from "@/components/categoryStyle";
-import { categoriesPresent, type ItemCategory } from "@/lib/types";
+import {
+  categoriesPresent,
+  type ItemCategory,
+  type WhenTag,
+} from "@/lib/types";
 import { buildInventory, type KitEntry } from "@/lib/inventory";
 import { formatDateRange, phaseOf, sortForBoard } from "@/lib/trips";
 
@@ -33,7 +38,7 @@ import { formatDateRange, phaseOf, sortForBoard } from "@/lib/trips";
 type View = "most" | "unused";
 
 export default function InventoryPage() {
-  const { trips, kit, ready, addKitItems, setKitQty, removeKitItem } =
+  const { trips, kit, ready, addKitItems, setKitQty, setKitWhen, removeKitItem } =
     useTrips();
   const [view, setView] = useState<View>("most");
 
@@ -122,6 +127,7 @@ export default function InventoryPage() {
                 category={category}
                 entries={ordered.filter((e) => e.category === category)}
                 onSetQty={setKitQty}
+                onSetWhen={setKitWhen}
                 onRemove={removeKitItem}
               />
             ))}
@@ -189,11 +195,18 @@ function KitCategory({
   category,
   entries,
   onSetQty,
+  onSetWhen,
   onRemove,
 }: {
   category: ItemCategory;
   entries: KitEntry[];
   onSetQty: (label: string, category: ItemCategory, qty: number) => void;
+  onSetWhen: (
+    label: string,
+    category: ItemCategory,
+    alwaysNeeded: boolean,
+    whenTags: WhenTag[],
+  ) => void;
   onRemove: (id: string) => void;
 }) {
   if (entries.length === 0) return null;
@@ -279,6 +292,14 @@ function KitCategory({
                 <Badge tone="accent">Added by you</Badge>
               )}
               {entry.dropped && <Badge>Retired</Badge>}
+              <WhenNeeded
+                label={entry.label}
+                alwaysNeeded={entry.alwaysNeeded}
+                whenTags={entry.whenTags}
+                onChange={(always, tags) =>
+                  onSetWhen(entry.label, entry.category, always, tags)
+                }
+              />
               {!entry.dropped &&
                 entry.unpackedOnFinished > 0 &&
                 entry.packedTimes === 0 && (

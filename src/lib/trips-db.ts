@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Item, KitItem, StayingPlace, Trip, TripReview } from "./types";
+import type {
+  Item,
+  KitItem,
+  StayingPlace,
+  Trip,
+  TripReview,
+  WhenTag,
+} from "./types";
 import type { TempBand, Wetness } from "./climate";
 
 /**
@@ -36,6 +43,8 @@ type KitRow = {
   label: string;
   category: string;
   qty: number | null;
+  always_needed: boolean | null;
+  when_tags: string[] | null;
   added_at: string;
 };
 
@@ -91,6 +100,8 @@ function toKitItem(row: KitRow): KitItem {
     /* null means nobody ever said how many — not the same as 1. The inventory
        infers a floor from what's been packed instead. */
     qty: row.qty ?? undefined,
+    alwaysNeeded: row.always_needed ?? false,
+    whenTags: (row.when_tags ?? []) as WhenTag[],
     addedAt: row.added_at,
   };
 }
@@ -169,6 +180,8 @@ export async function insertKitItems(
       label: item.label,
       category: item.category,
       qty: item.qty ?? null,
+      always_needed: item.alwaysNeeded ?? false,
+      when_tags: item.whenTags ?? [],
       added_at: item.addedAt,
     })),
   );
@@ -181,6 +194,20 @@ export async function saveKitQty(
   qty: number,
 ): Promise<void> {
   const { error } = await supabase.from("kit_items").update({ qty }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/** Save when an item is needed — the always flag and the condition tags. */
+export async function saveKitWhen(
+  supabase: SupabaseClient,
+  id: string,
+  alwaysNeeded: boolean,
+  whenTags: WhenTag[],
+): Promise<void> {
+  const { error } = await supabase
+    .from("kit_items")
+    .update({ always_needed: alwaysNeeded, when_tags: whenTags })
+    .eq("id", id);
   if (error) throw new Error(error.message);
 }
 
