@@ -1146,8 +1146,9 @@ and both are visible to a classmate.** Read from the instance's own
   new account is created with an email and a code, verified end to end through the
   real form. If the sign-up card ever shows nothing but social buttons again, this
   setting is the first place to look.
-- `display_config.application_name` is still **"HW4"**, so the card reads "Sign in
-  to HW4".
+- `display_config.application_name` is now **"Wanderlist"**, so the card reads
+  "Sign in to Wanderlist". It said "HW4" through Assignment 4; re-read from the
+  instance's own `/v1/environment` rather than assumed.
 
 Neither is settable from the CLI (`clerk config pull`/`patch` don't carry them),
 so they can't be fixed from here.
