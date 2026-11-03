@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession, useUser } from "@clerk/nextjs";
 import { Label } from "./Card";
 import { Button } from "./Button";
-import { QuietAction } from "./Controls";
+import { QuietAction, SuggestionList } from "./Controls";
 import { Field, TextInput } from "./Field";
 import { TripSection } from "./TripSection";
 import { useSupabase } from "@/lib/supabase";
@@ -66,8 +66,14 @@ export function StationBoard({
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** Geocoder candidates for what's being typed, so you can see it will work. */
+  const [candidates, setCandidates] = useState<
+    { label: string; lat: number; lon: number }[]
+  >([]);
   const [error, setError] = useState<string | undefined>();
-  const [tick, setTick] = useState(0);
+  /* Only the setter matters: the value is never read, it exists to force the
+     re-render that keeps "updated 14 seconds ago" counting. */
+  const [, setTick] = useState(0);
 
   /* Re-render on a timer so "updated 14 seconds ago" keeps counting and an
      untouched page slides into stale on its own. */
@@ -248,6 +254,68 @@ export function StationBoard({
     };
   }, [supabase, system, session, loadRuns]);
 
+  /**
+   * Show what the geocoder will actually match, as they type.
+   *
+   * Without this you type a neighbourhood, press Add, and find out only then
+   * whether it resolved — and if it matched the wrong "Chinatown" you have no
+   * way to tell. The trip form's destination field already works this way; the
+   * same affordance belongs here.
+   */
+  useEffect(() => {
+    const q = draft.trim();
+    if (!supabase || !system || q.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCandidates([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/place?q=${encodeURIComponent(q)}&lat=${system.lat ?? 0}&lon=${system.lon ?? 0}`,
+        );
+        if (cancelled) return;
+        if (!res.ok) {
+          setCandidates([]);
+          return;
+        }
+        const { places } = (await res.json()) as {
+          places: { lat: number; lon: number; label: string }[];
+        };
+        /* Only ones actually near this city. A match 3,000km away is not the
+           place they meant, and offering it would be worse than offering
+           nothing. */
+        const centre = { lat: system.lat ?? 0, lon: system.lon ?? 0 };
+        setCandidates(
+          places.filter((pl) => metresBetween(centre, pl) < 60_000).slice(0, 5),
+        );
+      } catch {
+        if (!cancelled) setCandidates([]);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [draft, supabase, system]);
+
+  function add(place: { label: string; lat: number; lon: number }) {
+    /* Adding somewhere already on the list is a no-op rather than an error —
+       the same rule the packing list follows for a repeated item. */
+    if (
+      !trip.stayingPlaces.some(
+        (p) => p.label.toLowerCase() === place.label.toLowerCase(),
+      )
+    ) {
+      onAddPlace(place);
+    }
+    setDraft("");
+    setCandidates([]);
+    setAdding(false);
+    setError(undefined);
+  }
+
   async function save(event: React.FormEvent) {
     event.preventDefault();
     const text = draft.trim();
@@ -282,13 +350,7 @@ export function StationBoard({
         setError("Couldn't find that. Try a neighbourhood or a nearby street.");
         return;
       }
-      /* Adding somewhere already on the list is a no-op rather than an error
-         — the same rule the packing list follows for a repeated item. */
-      if (!trip.stayingPlaces.some((p) => p.label.toLowerCase() === text.toLowerCase())) {
-        onAddPlace({ label: text, lat: hit.lat, lon: hit.lon });
-      }
-      setDraft("");
-      setAdding(false);
+      add({ label: hit.label, lat: hit.lat, lon: hit.lon });
     } finally {
       setSaving(false);
     }
@@ -409,7 +471,21 @@ export function StationBoard({
               />
             )}
           </Field>
-          <span className="flex items-center gap-3">
+
+          <SuggestionList
+            items={candidates.filter(
+              (c) =>
+                !trip.stayingPlaces.some(
+                  (p) => p.label.toLowerCase() === c.label.toLowerCase(),
+                ),
+            )}
+            getKey={(c) => c.label}
+            onPick={(c) => add(c)}
+          >
+            {(c) => c.label}
+          </SuggestionList>
+
+          <span className="mt-3 flex items-center gap-3">
             <Button type="submit">{saving ? "Finding…" : "Add"}</Button>
             {places.length > 0 && (
               <Button

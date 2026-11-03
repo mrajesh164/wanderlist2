@@ -71,7 +71,7 @@ export type WorkerRun = {
 };
 
 /** The cron interval, in seconds. Thresholds below are multiples of it. */
-export const POLL_SECONDS = 30;
+const POLL_SECONDS = 30;
 
 export type Freshness = "loading" | "fresh" | "stale" | "down";
 
@@ -107,7 +107,7 @@ export function freshnessOf(
   return "down";
 }
 
-export function agoLabel(iso: string | null, now = Date.now()): string {
+function agoLabel(iso: string | null, now = Date.now()): string {
   if (!iso) return "never";
   const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
   if (s < 60) return `${s} second${s === 1 ? "" : "s"} ago`;
