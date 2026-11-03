@@ -77,6 +77,19 @@ export type Trip = {
   /** Set only when the destination isn't in the climate table. */
   manualBand?: TempBand;
   manualWetness?: Wetness;
+  /**
+   * Where you're staying — a neighbourhood, a street, a hotel's address.
+   *
+   * Saved on the trip rather than typed into a search box, so it survives
+   * signing out and follows you to another device. It is what the live bikes
+   * panel anchors on; without it there is nothing better than a city centre,
+   * which is nobody's hotel.
+   */
+  staying?: string;
+  /** Cached from the geocoder, so the same string isn't resolved every load.
+   *  Absent when the geocoder couldn't place what was typed. */
+  stayingLat?: number;
+  stayingLon?: number;
   startDate: DateString;
   endDate: DateString;
   items: Item[];

@@ -29,10 +29,7 @@ import {
 import { categoriesPresent, type Item } from "@/lib/types";
 import { buildInventory, ownedCounts, shortfall } from "@/lib/inventory";
 import { StationBoard } from "@/components/StationBoard";
-import { DayPlan } from "@/components/DayPlan";
 import { TripSection } from "@/components/TripSection";
-import { citySlugFor } from "@/lib/places";
-import { tripDays } from "@/lib/trip-days";
 
 /**
  * The checklist. The core task, and the screen this app exists for.
@@ -233,22 +230,21 @@ function Checklist() {
         </TripSection>
       )}
 
-      {/* Where you'll be each day, built from the same per-day normals the
-          strip above draws. Sits before the bikes panel because the plan is
-          what the bikes are *for* — "how do I get to Tuesday" only means
-          something once Tuesday has somewhere to be. */}
-      {live.state === "ok" && (
-        <DayPlan
-          citySlug={citySlugFor(trip.destination)}
-          days={tripDays(trip.startDate, trip.endDate, live.byMonth)}
-        />
-      )}
-
       {/* Live bikes at the destination. Sits here, with the conditions strip
           and before the packing list, because it answers "what is it like
           there" rather than "what should I bring" — a peer of the climate
           half of this page, not an appendix to the list. */}
-      <StationBoard destination={trip.destination} />
+      <StationBoard
+        trip={trip}
+        onSaveStaying={(staying, lat, lon) =>
+          updateTrip(trip.id, (t) => ({
+            ...t,
+            staying,
+            stayingLat: lat,
+            stayingLon: lon,
+          }))
+        }
+      />
 
       {/* Everything to do with packing in one frame: the progress bar, the
           list itself, and the form at the foot. They were three loose blocks
