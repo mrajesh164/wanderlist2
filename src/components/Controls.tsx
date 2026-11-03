@@ -212,11 +212,18 @@ export function SuggestionList<T>({
   if (items.length === 0) return null;
 
   return (
-    <ul className="mt-1 border border-rule-strong bg-surface">
+    /* `data-suggestions` lets the field above tell "they left to pick one of
+       these" from "they left the field" — see TripForm's blur handler. */
+    <ul data-suggestions className="mt-1 border border-rule-strong bg-surface">
       {items.map((item) => (
         <li key={getKey(item)}>
           <button
             type="button"
+            /* Keep focus in the input. Without this, mousedown blurs the
+               field, the field decides nothing was picked and shows its
+               error, and the click that picks the city arrives a moment
+               later and clears it again — one frame of a wrong error. */
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => onPick(item)}
             className="block w-full px-3 py-1.5 text-left text-small text-ink hover:bg-selected"
           >

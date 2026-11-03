@@ -299,7 +299,35 @@ export function TripForm({
                   setErrors((x) => ({ ...x, destination: undefined }));
                 }
               }}
-              onBlur={() => setDestinationSettled(true)}
+              /**
+               * Say so when you leave the field, not when you press the
+               * button.
+               *
+               * Typing "Atlanta" and finding out it isn't available only
+               * after filling in both dates and submitting is three wasted
+               * steps, and the refusal arrives attached to the wrong action.
+               * Leaving the field is the moment the answer is known.
+               *
+               * Not while typing, though: at "Atl" there is no match either,
+               * and a form that argues mid-word is the thing
+               * `destinationSettled` already exists to avoid.
+               */
+              onBlur={(e) => {
+                setDestinationSettled(true);
+
+                /* Tabbing into the suggestion list is not leaving the field.
+                   (Mouse clicks never get here — the list prevents the blur.
+                   This is the keyboard path, where relatedTarget is set.) */
+                const to = e.relatedTarget as HTMLElement | null;
+                if (to?.closest("[data-suggestions]")) return;
+
+                if (destination.trim() && !pickedFromList) {
+                  setErrors((x) => ({
+                    ...x,
+                    destination: "Pick a city from the list.",
+                  }));
+                }
+              }}
             />
             <SuggestionList
               items={matches}
