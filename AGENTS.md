@@ -786,6 +786,21 @@ slot on the trip page — the end of the left-to-right progression, which reads 
 *continue* — while "Done" sat bottom-left. Destructive work goes left, behind
 its confirm; the primary action finishes the row.
 
+**A system can have docks and no bikes, and Denver is the proof.** Its docked
+bikeshare shut down in 2020 — Lyft runs dockless scooters there now — but the
+station records survive with their capacity intact: 119 stations, all reporting
+sixteen empty spaces and zero bikes, permanently. Capacity alone said "docked",
+so it was added, and a Denver trip offers bikes nobody can take.
+
+`/api/find-system` now requires **at least one bike somewhere, right now**
+before accepting a system, which is what separates a working one from a
+stopped one — a real system at four in the morning still has bikes in it.
+That guard is generic, so no future city needs checking by hand.
+
+The `den` row is still in the table: the MCP declines destructive SQL, which is
+the right default, and it is one stale row rather than a bug in the mechanism.
+Delete it from the table editor if it bothers you.
+
 ### When a thing is needed
 
 Assignment 4 feedback asked for weather conditions and scenarios per inventory

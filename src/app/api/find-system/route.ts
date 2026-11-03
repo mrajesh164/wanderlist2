@@ -107,7 +107,29 @@ async function docked(
       data?: { stations?: { capacity?: number }[] };
     };
     const stations = body.data?.stations ?? [];
-    return stations.some((s) => (s.capacity ?? 0) > 0);
+    if (!stations.some((s) => (s.capacity ?? 0) > 0)) return false;
+
+    /**
+     * Capacity is not enough: a system can have docks and no bikes.
+     *
+     * Denver proved it. Its docked bikeshare shut down in 2020 and Lyft runs
+     * dockless scooters there now, but the station records survive with their
+     * capacity intact — all 119 of them reporting 16 empty spaces and zero
+     * bikes, forever. Capacity said "docked", and the app dutifully showed a
+     * city where you can never get a bike.
+     *
+     * So: at least one bike, somewhere, right now. A real system at four in
+     * the morning still has bikes in it; one hundred per cent empty across
+     * every station is a system that has stopped.
+     */
+    const live = await fetch(statusUrl, { signal: AbortSignal.timeout(15_000) });
+    if (!live.ok) return false;
+    const now = (await live.json()) as {
+      data?: { stations?: { num_bikes_available?: number }[] };
+    };
+    return (now.data?.stations ?? []).some(
+      (s) => (s.num_bikes_available ?? 0) > 0,
+    );
   } catch {
     return false;
   }
