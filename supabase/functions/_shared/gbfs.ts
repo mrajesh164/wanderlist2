@@ -206,3 +206,62 @@ export function changedRows(
   }
   return out;
 }
+
+/**
+ * Is this a URL the worker should be willing to fetch?
+ *
+ * The feed URLs are not ours. They come from a GBFS operator's own discovery
+ * document, reached from MobilityData's registry, and the worker fetches them
+ * with the service role from inside Supabase's network. Nobody using this app
+ * picks them — the most a person can do is choose which registry city to look
+ * up — so this is a supply-chain guard rather than a user-input one: it is
+ * what stops a compromised operator (or a merged-but-hostile registry entry)
+ * from pointing us at `http://169.254.169.254/` or `file:///`.
+ *
+ * **Not https-only, deliberately.** Five systems the app offers still serve
+ * plain http — Buffalo, Eugene, Hamilton, Long Beach, Rosario — and dropping
+ * five working cities to close a hole that scheme-checking doesn't close
+ * anyway would be the wrong trade. What is actually refused is a scheme that
+ * isn't http(s), and a host that names the machine we are running on or a
+ * private network.
+ *
+ * Literal matching only. Resolving a hostname to check its address would be
+ * sound and is a different piece of work — it needs DNS in both runtimes and
+ * it still races rebinding. This stops the cheap version.
+ */
+export function fetchableFeedUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".local")
+  ) {
+    return false;
+  }
+
+  /* Loopback, link-local (169.254.169.254 is the cloud metadata address), and
+     the three private IPv4 ranges. Plus IPv6 loopback and unique-local. */
+  if (
+    /^127\./.test(host) ||
+    /^0\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^169\.254\./.test(host) ||
+    /^172\.(1[6-9]|2[0-9]|3[01])\./.test(host) ||
+    host === "::1" ||
+    /^f[cd][0-9a-f]{2}:/.test(host)
+  ) {
+    return false;
+  }
+
+  return true;
+}

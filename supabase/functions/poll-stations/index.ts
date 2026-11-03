@@ -26,6 +26,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   changedRows,
+  fetchableFeedUrl,
   parseInformation,
   parseStatus,
   type StationCounts,
@@ -49,6 +50,12 @@ function chunked<T>(xs: T[], n = CHUNK): T[][] {
 }
 
 async function fetchJSON(url: string): Promise<unknown> {
+  /* The URL comes from a third party's discovery document, and this runs with
+     the service role inside Supabase's network, so refuse anything pointing at
+     us or at a private address before opening the socket. See
+     `fetchableFeedUrl` for why this is not https-only. */
+  if (!fetchableFeedUrl(url)) throw new Error(`refusing to fetch ${url}`);
+
   /* A hung feed must not hold the whole run open — the next cron tick is 30
      seconds away and a stuck invocation would overlap it. */
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });

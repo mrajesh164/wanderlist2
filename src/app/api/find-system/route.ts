@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { supabaseForRequest } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { geocode } from "@/lib/open-meteo";
+import { fetchableFeedUrl } from "../../../../supabase/functions/_shared/gbfs";
 
 /**
  * Find the bikeshare system for a city nobody has visited before.
@@ -218,6 +219,11 @@ export async function POST(request: Request) {
         const ss = feeds["station_status"];
         const si = feeds["station_information"];
         if (!ss || !si) continue;
+        /* The operator chose these, not us, and they are about to be fetched
+           server-side and then stored for the worker to fetch every thirty
+           seconds. Refuse a scheme or host that has no business being in a
+           feed URL before either of those happens. */
+        if (!fetchableFeedUrl(ss) || !fetchableFeedUrl(si)) continue;
         if (!(await worthShowing(ss, si))) continue;
         hit = candidate;
         statusUrl = ss;
