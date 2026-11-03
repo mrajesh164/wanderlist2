@@ -121,11 +121,12 @@ function FirstVisitShell({ children }: { children?: React.ReactNode }) {
           count and the weather it reasoned from. Reading that is learning by
           doing; reading a paragraph about it is not. */}
       <p className="measure mt-4 text-subhead font-semibold text-ink">
-        Day plans and packing lists for the trips you take again.
+        Pack for the weather. Get around on a bike.
       </p>
       <p className="measure mt-2 text-body text-muted">
-        Each day gets somewhere to be, chosen from the weather on that date, and
-        the bikes free at the nearest dock right now.
+        Your dates and destination build the packing list from fifteen years of
+        weather. Then the docks nearest where you&rsquo;re staying show how many
+        bikes are free — right now, updating while you watch.
       </p>
 
       {/* In the shell on purpose: it's the instruction and the one route that

@@ -21,7 +21,7 @@ const sourceSans = Source_Sans_3({
 export const metadata: Metadata = {
   title: "Wanderlist",
   description:
-    "Day plans and packing lists for the trips you take again. Each day is chosen from the weather on that date, with live bikeshare counts at the nearest dock.",
+    "Pack for the weather, get around on a bike. Packing lists built from fifteen years of weather for your dates, with live bikeshare counts at the docks nearest where you are staying.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

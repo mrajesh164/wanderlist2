@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "./Button";
 import { Field, Select, TextInput, focusFirstError } from "./Field";
@@ -16,7 +16,6 @@ import {
   describeConditions,
   findClimate,
   manualConditions,
-  searchClimates,
   type TempBand,
   type Wetness,
 } from "@/lib/climate";
@@ -85,17 +84,58 @@ export function TripForm({
     return CLIMATES.find((c) => c.city.toLowerCase() === typed);
   }, [climateSlug, destination]);
 
-  /* Once it's resolved, the suggestion list has nothing left to offer. */
-  const matches = useMemo(
-    () => (climate ? [] : searchClimates(destination)),
-    [destination, climate],
-  );
+  /**
+   * Destinations come from the bikeshare registry, not the climate table.
+   *
+   * A trip can only be made somewhere the live layer will work, so the field
+   * offers the 945 cities that publish a GBFS feed. Weather works everywhere
+   * and is no longer the thing that limits the list, which is why the old
+   * hint about "a few places" has gone.
+   *
+   * The trade-off, stated plainly: you can no longer make a trip to a village
+   * in the Alps. That was possible before and is a real loss — chosen so that
+   * anyone opening this app lands somewhere the live counts actually move.
+   */
+  const [matches, setMatches] = useState<
+    { city: string; region: string; country: string }[]
+  >([]);
+
+  useEffect(() => {
+    const q = destination.trim();
+    if (q.length < 2 || climate) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMatches([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/cities?q=${encodeURIComponent(q)}`);
+        if (cancelled) return;
+        const { cities } = (await res.json()) as {
+          cities?: { city: string; region: string; country: string }[];
+        };
+        setMatches(cities ?? []);
+      } catch {
+        if (!cancelled) setMatches([]);
+      }
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [destination, climate]);
 
   /* The destination isn't in the table, so ask rather than guess. Not an error —
      a trip to a village in the Alps is a perfectly good trip. */
   /* Only once they have finished typing. Judging a half-typed destination
      put "WE DON'T KNOW DEL" on screen while someone was still reaching for
      "Delhi", which reads as the form arguing with you mid-word. */
+  /* A destination only counts once it has been chosen from the list, so a
+     trip cannot be made somewhere the live layer has nothing to show. */
+  const [pickedFromList, setPickedFromList] = useState(
+    Boolean(source?.destination),
+  );
   const [destinationSettled, setDestinationSettled] = useState(
     Boolean(source?.destination),
   );
@@ -120,9 +160,12 @@ export function TripForm({
     };
   }, [startDate, endDate, climate, needsManualConditions, band, wetness, repeatOf, kit]);
 
-  function pickDestination(slug: string, city: string) {
+  function pickDestination(city: string) {
     setDestinationSettled(true);
-    setClimateSlug(slug);
+    setPickedFromList(true);
+    /* The climate table still resolves where it can, so a city it knows keeps
+       its offline normals; everywhere else fetches them when the trip opens. */
+    setClimateSlug(findClimate(city)?.slug ?? "");
     setDestination(city);
     setErrors((e) => ({ ...e, destination: undefined }));
   }
@@ -133,6 +176,11 @@ export function TripForm({
     const next: Errors = {};
     if (!name.trim()) next.name = "Name this trip so you can find it again.";
     if (!destination.trim()) next.destination = "Enter a destination.";
+    /* Phrased as an instruction, not a refusal: the list is the only way to
+       reach a city the live layer can serve, so say to use it. */
+    else if (!pickedFromList) {
+      next.destination = "Choose a city from the list as you type.";
+    }
     if (!startDate) next.startDate = "Pick a start date.";
     if (!endDate) next.endDate = "Pick an end date.";
     else if (startDate && endDate < startDate) {
@@ -202,7 +250,7 @@ export function TripForm({
 
       <Field
         label="Where are you going?"
-        hint="Start typing — we know the usual weather for a few places."
+        hint="Start typing. These are the cities with live bikeshare."
         error={errors.destination}
       >
         {(props) => (
@@ -216,6 +264,7 @@ export function TripForm({
                 setDestination(e.target.value);
                 setClimateSlug("");
                 setDestinationSettled(false);
+                setPickedFromList(false);
                 if (errors.destination) {
                   setErrors((x) => ({ ...x, destination: undefined }));
                 }
@@ -224,13 +273,16 @@ export function TripForm({
             />
             <SuggestionList
               items={matches}
-              getKey={(c) => c.slug}
-              onPick={(c) => pickDestination(c.slug, c.city)}
+              getKey={(c) => `${c.city}|${c.region}`}
+              onPick={(c) => pickDestination(c.city)}
             >
               {(c) => (
                 <>
                   {c.city}
-                  <span className="text-muted"> · {c.region}</span>
+                  <span className="text-muted">
+                    {" · "}
+                    {[c.region, c.country].filter(Boolean).join(", ")}
+                  </span>
                 </>
               )}
             </SuggestionList>
