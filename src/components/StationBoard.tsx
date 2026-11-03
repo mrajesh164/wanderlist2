@@ -82,18 +82,47 @@ export function StationBoard({
     return () => clearInterval(t);
   }, []);
 
-  /* Destination -> bikeshare system, the same match used for climate. */
+  /**
+   * Destination -> bikeshare system.
+   *
+   * Known cities answer from the table. One we have never seen goes to
+   * /api/find-system, which looks it up in MobilityData's registry of every
+   * GBFS system in the world and writes the row — so coverage is bounded by
+   * what exists rather than by what I typed into a migration.
+   */
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
     (async () => {
       try {
+        const city = trip.destination.trim();
         const { data } = await supabase
           .from("bike_systems")
           .select("slug, name, city, lat, lon")
-          .ilike("city", trip.destination.trim())
+          .ilike("city", city)
           .maybeSingle();
-        if (!cancelled) setSystem(data ?? null);
+        if (cancelled) return;
+        if (data) {
+          setSystem(data);
+          return;
+        }
+
+        const res = await fetch("/api/find-system", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ city }),
+        });
+        if (cancelled) return;
+        if (res.ok) {
+          const { system: found } = (await res.json()) as {
+            system: BikeSystem | null;
+          };
+          setSystem(found ?? null);
+        } else {
+          setSystem(null);
+        }
+      } catch {
+        if (!cancelled) setSystem(null);
       } finally {
         if (!cancelled) setResolved(true);
       }
@@ -394,9 +423,9 @@ export function StationBoard({
     return (
       <TripSection title="Live bikes" meta={trip.destination}>
         <p className="measure text-small text-muted">
-          No bikeshare system in {trip.destination} yet. Covered so far:
-          Boston, Chicago, Denver, El Paso, Los Angeles, Madison, Milwaukee,
-          New York, Philadelphia, Portland, San Francisco and Washington.
+          No docked bikeshare in {trip.destination}. Any city with a public
+          GBFS feed works here — this one either has none, or runs scooters
+          rather than docks.
         </p>
       </TripSection>
     );
