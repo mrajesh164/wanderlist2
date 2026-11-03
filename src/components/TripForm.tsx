@@ -273,7 +273,13 @@ export function TripForm({
 
       {needsManualConditions && (
         <fieldset className="mb-6 border border-rule bg-surface p-4">
-          <legend className="px-1 font-sans text-label uppercase text-muted">
+          {/* float-left with a full width drops the legend *inside* the box
+              instead of straddling the top border, which is the browser
+              default. Straddling put the label half on the page and half on
+              the card — two different colours through one line of text, which
+              reads as a rendering fault. The border runs unbroken now and the
+              label sits where every other section label in the app sits. */}
+          <legend className="float-left mb-3 w-full font-sans text-label uppercase tracking-[0.14em] text-muted">
             Roughly what to expect
           </legend>
           {/* The old legend echoed whatever had been typed, uppercased — "WE
