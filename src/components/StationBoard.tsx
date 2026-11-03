@@ -555,7 +555,7 @@ export function StationBoard({
         <form onSubmit={save} noValidate className="mt-4 max-w-md">
           <Field
             label={places.length === 0 ? "Where are you staying?" : "Add a place"}
-            hint="A neighbourhood, a street, or an address. Saved with the trip, so you only say it once."
+            hint="A city, neighbourhood, street, or address. Saved with the trip, so you only say it once."
             error={error}
           >
             {(props) => (
