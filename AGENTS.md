@@ -786,6 +786,55 @@ slot on the trip page — the end of the left-to-right progression, which reads 
 *continue* — while "Done" sat bottom-left. Destructive work goes left, behind
 its confirm; the primary action finishes the row.
 
+### When a thing is needed
+
+Assignment 4 feedback asked for weather conditions and scenarios per inventory
+item, and for separating what you always need from what you sometimes need. The
+sentence that decided how to build it was *"so the app can learn when specific
+items are needed"* — tags that only label are decoration, so these drive
+`buildPackingList`.
+
+`kit_items` carries `always_needed` and `when_tags`. Every row in the inventory
+has a **when** control: Always, or any of cold / hot / wet / weekends / long
+trips. Tag the umbrella "when it rains" once and it lands on every wet trip
+without being re-added.
+
+**The vocabulary is closed, and that is the design.** Each tag has to be
+decidable from what a trip already carries — `cold`, `hot` and `wet` come from
+the same climate normals the list is built from; `weekend` and `long` come from
+the dates. `tagsForTrip()` in `suggestions.ts` is the only place that decides.
+Free text would let somebody write "beach" and then wonder why it never fired,
+because nothing can evaluate it. A check constraint keeps the column honest.
+
+**Both defaults are "no opinion".** An item nobody has qualified behaves exactly
+as it did before — the same care `qty` takes about not inventing a claim.
+Setting a condition clears Always, because the two are alternatives and holding
+both would make the row's summary a lie.
+
+**Folded by default.** Five toggles on every row of a long inventory is the
+clutter the same feedback complained about elsewhere.
+
+Checked before it was wired up:
+
+```
+Chicago in Nov   tags cold,weekend,wet   -> Umbrella, Passport
+Lisbon in Jul    tags hot,long           -> Sun hat, Passport, Laundry sheets
+```
+
+### One security finding, and why it was left
+
+`pg_net`, created for the cron job, leaves `net.http_post` executable by `anon`
+and `authenticated` — both reachable with the publishable key. That reads like
+server-side request forgery, and the advisor flags it.
+
+**It is not reachable from a client, and that was tested rather than reasoned
+about.** PostgREST exposes only `public` and `graphql_public`; asking for the
+`net` schema returns `PGRST106` naming exactly those two. The revokes in
+`20261103120000` are a no-op because the grants belong to `supabase_admin`, and
+the migration says so rather than implying otherwise.
+
+**What would open it is adding `net` to the exposed schemas.** Don't.
+
 ### Repo layout — one repo, two runtimes
 
 No workspaces, no `apps/` restructure. `supabase/` already sits beside `src/`:

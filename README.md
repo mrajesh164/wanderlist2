@@ -22,8 +22,15 @@ A trip knows where you're going and when. That already drove the packing list, t
 fifteen years of weather normals for your dates. Now it drives two more things.
 
 **Where you're staying.** You name the places that matter on this trip — the hotel's
-street, the neighbourhood you're deciding between — and they're saved on the trip, so you
-say it once and it's there after you sign out and on your next device.
+street, the neighbourhoods you're deciding between — and they're saved on the trip, so
+you say it once and they're there after you sign out and on your next device. It's a
+list, because comparing two neighbourhoods is half of what live counts are good for.
+
+**When you need things.** Every inventory row can say *always*, or *when it's cold /
+hot / wet*, or *on weekends / long trips*. Those aren't labels: `buildPackingList` reads
+them, so tagging the umbrella "when it rains" once puts it on every wet trip without you
+re-adding it. The vocabulary is closed because each tag has to be something the app can
+decide from the dates and the climate normals it already has.
 
 **Live bikes.** For each of those places, the nearest docks and how many bikes and empty
 spaces each has *right now*, arriving without a refresh.
