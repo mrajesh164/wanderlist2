@@ -370,8 +370,9 @@ export function StationBoard({
     return (
       <TripSection title="Live bikes" meta={trip.destination}>
         <p className="measure text-small text-muted">
-          No bikeshare system in {trip.destination} yet. Chicago, New York,
-          Boston, Washington and San Francisco are covered.
+          No bikeshare system in {trip.destination} yet. Covered so far:
+          Boston, Chicago, Denver, El Paso, Los Angeles, Madison, Milwaukee,
+          New York, Philadelphia, Portland, San Francisco and Washington.
         </p>
       </TripSection>
     );
