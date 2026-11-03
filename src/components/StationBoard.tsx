@@ -66,6 +66,9 @@ export function StationBoard({
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [seeded, setSeeded] = useState(false);
+  /* Bumped once seeding finishes, to re-run the dock lookup. */
+  const [reloadTick, setReloadTick] = useState(0);
   /** Geocoder candidates for what's being typed, so you can see it will work. */
   const [candidates, setCandidates] = useState<
     { label: string; lat: number; lon: number; kind?: string }[]
@@ -157,6 +160,48 @@ export function StationBoard({
   }, [loadRuns]);
 
   /**
+   * Load a system's stations the first time anybody needs them.
+   *
+   * A `bike_systems` row is only an address — it says where to fetch, not
+   * what is there. Without this a freshly-resolved city shows "no docks
+   * within a few minutes' walk" for every place, which reads as "this
+   * neighbourhood has no bikes" when the truth is "nothing has been fetched
+   * yet". Toronto did exactly that.
+   *
+   * This effect used to live in DayPlan and went with it when that file was
+   * deleted. Keeping it here, next to the only thing that reads stations,
+   * is where it should have been.
+   */
+  useEffect(() => {
+    if (!supabase || !system || seeded) return;
+    let cancelled = false;
+
+    (async () => {
+      const { count } = await supabase
+        .from("stations")
+        .select("station_id", { count: "exact", head: true })
+        .eq("system_slug", system.slug);
+      if (cancelled || (count ?? 0) > 0) {
+        if (!cancelled) setSeeded(true);
+        return;
+      }
+      await fetch("/api/seed-city", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: system.slug }),
+      }).catch(() => {});
+      if (!cancelled) {
+        setSeeded(true);
+        /* Re-run the dock lookup now there is something to find. */
+        setReloadTick((n) => n + 1);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, system, seeded]);
+
+  /**
    * Find the docks near every saved place, and register them.
    *
    * One effect because the two halves are one thought: the stations shown are
@@ -225,7 +270,7 @@ export function StationBoard({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- placesKey is the list
-  }, [supabase, system, user, placesKey]);
+  }, [supabase, system, user, placesKey, reloadTick]);
 
   /* Realtime. Needs the Clerk token on the socket, set before subscribing and
      refreshed, or Postgres Changes delivers nothing and says nothing. */
