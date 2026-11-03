@@ -5,9 +5,9 @@ the first visit, the core task, and coming back.
 
 The core task, as one sentence:
 
-> I add a trip → it plans each day from the destination and the weather, builds a
-> packing list to match, and shows the bikes free at each day's stop right now →
-> I check things off as I pack → I come back next time and it's already corrected.
+> I add a trip → it builds a packing list from the dates and the weather there,
+> and shows the bikes free right now near the places I'm staying → I check things
+> off as I pack → I come back next time and it's already corrected.
 
 ## The three flows
 

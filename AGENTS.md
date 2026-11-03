@@ -45,7 +45,7 @@ by reading a tour.
 
 **2. The core task** — written as one sentence:
 
-> I add a trip → it plans each day from the destination and the weather, builds a packing list to match, and shows the bikes free at each day's stop right now → I check things off as I pack → I come back next time and it's already corrected.
+> I add a trip → it builds a packing list from the dates and the weather there, and shows the bikes free right now near the places I'm staying → I check things off as I pack → I come back next time and it's already corrected.
 
 **3. Coming back** — three reasons, on three clocks:
 - *Mid-pack:* packing happens over several evenings, so a part-packed list is a
@@ -698,56 +698,59 @@ no glow and no animation beyond the fade — this is the one moment the live lay
 is visible as *live*, and it has to stay inside a design system whose border
 radius is zero.
 
-### The day plan, and why it exists
+### Places you're watching, and the itinerary that isn't here
 
-The bikes panel was coherent on its own and disconnected from the app around
-it. The conditions strip **changes the packing list** — the band and wetness
-are what generated it. The bikes panel sat in the same cluster, looked like a
-peer, and produced nothing. It was a readout.
+The bikes panel anchors on **`trip.stayingPlaces`** — a list of neighbourhoods,
+streets or addresses saved on the trip. Name one and the three nearest docks
+register themselves, the worker starts polling them, and the counts arrive.
 
-An itinerary fixes that, but only the generated kind. A hand-authored plan
-would be a third concept competing for the page; a plan that is **a function of
-the destination and the dates** is the same move the packing list already
-makes, and it gives the live layer something to be about.
+**It is a list, not a field.** One place answers "can I get a bike outside the
+hotel". Two answer "which of these neighbourhoods should I stay in", which is
+the other half of what live counts are for. Adding a place already on the list
+is a no-op, like a repeated packing item. Two places sharing a dock register it
+once — the upsert runs over a `Set` of station ids.
 
-**`lib/places.ts` is curated, and the app never geocodes it.** Same pattern as
-`photos.ts`. Each `area` was resolved once through Open-Meteo's geocoder and
-accepted only if it landed within 25km of the city claiming it — which rejected
-four of the first eight New York candidates. "Williamsburg" resolves 215km
-away, "SoHo" 506km, "Chelsea" 94km, "Dumbo" to another continent. Famous
-neighbourhood names are not unique. **Geocode and check the distance before
-adding one; don't type coordinates from memory.**
+**It is saved on the trip, not typed into a search.** That is the whole point:
+it survives signing out and it is there on the next device. A search box is
+retyped on every visit, and a city centre — the only alternative anchor — is
+nobody's hotel.
 
-**`lib/itinerary.ts` picks a place per day from the same per-day normals the
-strip draws.** A wet or cold day takes an indoor place; a fine day takes an
-outdoor one; nothing repeats until the list runs out. The second half of that
-rule was missing at first, and a dry run caught it: with only the indoor
-preference, a fine Sunday took the museum because the museum sorts first,
-leaving a wet Tuesday one fewer indoor option. **Indoor places are the scarce
-resource** — spend them on the days that need them.
+**`jsonb`, not a fourth table**, for the same reasons `items` is: the list is
+read and written whole, nothing filters or joins on a single place, and one row
+per trip is one RLS check rather than one per place.
 
-**Nothing is stored.** The plan is derived, so it survives a reload with no
-table behind it, and the same trip next year regenerates against next year's
-dates. That is deliberate: a stored plan would be trip-specific state that
-*doesn't* carry forward, which would compete with the correction loop instead
-of leaving it alone.
+**There was a generated day-by-day itinerary here and it was cut. Don't rebuild
+it without reading this.** It picked a place per day from the per-day normals —
+museum when wet, park when fine — and it read well. It also required a
+hand-curated list of places per city, which meant it worked for six cities and
+rendered *nothing* everywhere else. A trip to Paris got a feature that silently
+did not exist.
 
-**`citySlugFor` shares a slug space with `bike_systems`.** `chi` has places and
-live bikes; `lis` has places and no bikes, so a station query for `lis` returns
-nothing. That is the correct behaviour, not a special case to code around.
+The obvious fix is to generate places instead, and the only keyless source is
+Wikipedia's geosearch. It was tried. It returns articles that happen to have
+coordinates, not places worth going:
 
-**The day's dock has a Watch control, and that is load-bearing.** The worker
-only polls followed stations — the thing that keeps writes at 3% of the feed —
-so a planned day shows a dock and a distance but no numbers until somebody
-asks. One tap is the ask, and counts arrive within one cron interval. It also
-inverts the discovery problem: you follow the dock *by Tuesday's plan* rather
-than hunting a station name you were never going to know.
+```
+Paris      -> "Autonomous Port of Paris", "Semaine sanglante"
+Barcelona  -> "Bombing of Barcelona", "Barcelona Metro line 1"
+Tokyo      -> four suburban train stations
+```
+
+"Day 1: Bombing of Barcelona" is worse than no itinerary. Doing it properly
+needs a places API with a key, which breaks the one-external-API rule. So the
+feature was removed rather than shipped at six-city coverage: **better to do one
+thing for every city than a good thing for six.**
+
+Three columns on `trips` — `staying`, `staying_lat`, `staying_lon` — are
+vestigial from the hour when this was a single place rather than a list. Like
+`is_example`: nothing reads or writes them, and dropping a column is a
+destructive migration with no benefit beyond tidiness.
 
 ### How the trip page is organised, after the Assignment 4 feedback
 
 Four blocks, one frame. `components/TripSection.tsx` supplies a 2px rule, a
-display title, a muted line on the right, and a `<details>` body: **Weather**,
-**Your days**, **Live bikes**, **Packing list**, in that order.
+display title, a muted line on the right, and a `<details>` body:
+**Weather**, **Live bikes**, **Packing list**, in that order.
 
 **It wasn't always.** Each block grew its own header — outlined badges, a label
 pair, a display heading, a bare rule — and four styles of heading is most of

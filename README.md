@@ -3,10 +3,9 @@
 Day plans and packing lists for the trips you take again.
 
 You keep the trips you take again in one place — Thanksgiving at your parents', a
-conference in New York, Lisbon in March. Each one plans its own days from the weather on
-those dates — the museum when it will rain, the park when it won't — builds a packing
-list to match, and shows **how many bikes are free at the nearest dock to each day's
-stop, right now**. Afterwards you say what you didn't need and what you wished you'd
+conference in New York, Lisbon in March. Each one builds its own packing list from your
+dates and the weather where you're going *that month*, and shows **how many bikes are
+free right now at the docks nearest the places you're staying**. Afterwards you say what you didn't need and what you wished you'd
 brought, and the next time you take that trip, it all starts already corrected.
 
 Built for **Design, Build, Ship · MPCS 51238**. Assignment 3 designed the flows and the
@@ -22,14 +21,18 @@ around the clock and a page that updates itself.
 A trip knows where you're going and when. That already drove the packing list, through
 fifteen years of weather normals for your dates. Now it drives two more things.
 
-**Your days.** The destination and the dates generate a plan — somewhere to be each day,
-picked off the same per-day normals the weather strip draws. A wet day takes an indoor
-place, a fine one takes outdoors, nothing repeats until the list runs out. Nothing is
-stored: the plan is a function of the trip, so it regenerates next year against next
-year's dates rather than carrying stale state forward.
+**Where you're staying.** You name the places that matter on this trip — the hotel's
+street, the neighbourhood you're deciding between — and they're saved on the trip, so you
+say it once and it's there after you sign out and on your next device.
 
-**Live bikes.** For each planned day, the nearest bikeshare dock and how many bikes and
-empty spaces it has *right now*, arriving without a refresh.
+**Live bikes.** For each of those places, the nearest docks and how many bikes and empty
+spaces each has *right now*, arriving without a refresh.
+
+There was briefly a generated day-by-day itinerary here, and it was cut. It needed a
+hand-written list of places per city, so it worked for six cities and silently did
+nothing everywhere else, and the only keyless way to generate places anywhere returns
+things like "Bombing of Barcelona". **Naming where you're staying works in any city**, and
+it is a better anchor than a city centre, which is nobody's hotel.
 
 ```
 GBFS feed  ──every 30s──▶  Edge Function  ──only changed rows──▶  Postgres  ──Realtime──▶  Page
@@ -129,9 +132,9 @@ Functions run on **Deno**, so `"supabase"` is in `tsconfig.json`'s `exclude` —
 
 ## The core task, as one sentence
 
-> I add a trip → it plans each day from the destination and the weather, builds a
-> packing list to match, and shows the bikes free at each day's stop right now →
-> I check things off as I pack → I come back next time and it's already corrected.
+> I add a trip → it builds a packing list from the dates and the weather there,
+> and shows the bikes free right now near the places I'm staying → I check things
+> off as I pack → I come back next time and it's already corrected.
 
 ## The three flows
 
