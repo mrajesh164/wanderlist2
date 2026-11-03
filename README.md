@@ -55,6 +55,38 @@ somebody looks at it. Bikes come and go in Chicago at 2am.
 Measured before committing to it, not assumed: **2,078 Chicago stations, 72 of which
 changed across two calls 120 seconds apart — 3.5%.** The feed advertises `ttl: 60`.
 
+### Any city, not a list I maintain
+
+`bike_systems` began as twelve rows typed into a migration, which meant coverage
+was bounded by my typing rather than by what exists — a trip to Toronto was told
+"no bikeshare here", which wasn't true.
+
+A city nobody has visited now looks itself up. `/api/find-system` reads
+[MobilityData's registry](https://github.com/MobilityData/gbfs/blob/master/systems.csv)
+of every GBFS system in the world — **1,277 of them** — follows the system's
+auto-discovery document to its station feeds, and writes the row. Once; after
+that it is cached like any other. `/api/seed-city` then loads the stations.
+
+Three things that had to be got right, each found by testing rather than
+reasoning:
+
+**Two feed generations.** GBFS 1.x nests feeds under a language key, 3.x puts
+them on `data` directly. 3.0 also changed `name` from a string to a localised
+array, which is why Toronto's first load showed 1,075 stations called "7713" and
+"7599". Both shapes are read now.
+
+**Several operators per city.** The registry lists them all — Paris has six.
+Scooter fleets publish `station_status` too, where a "station" is a painted
+square: Dott Paris reports 12,667 of them with no dock capacity at all.
+
+**Docks without bikes.** Capacity alone isn't enough. Denver's docked system shut
+down in 2020 but its 119 station records survive, each reporting sixteen empty
+spaces, permanently. So a candidate also has to have **at least one bike
+somewhere, right now** — a real system at four in the morning still does.
+
+Feeds that answer 403, as Vélib' and Lime do, are skipped rather than failing the
+city.
+
 ### The worker
 
 `supabase/functions/poll-stations/index.ts`, a Deno Edge Function invoked by Supabase Cron
