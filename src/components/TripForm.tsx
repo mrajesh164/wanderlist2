@@ -84,6 +84,12 @@ export function TripForm({
     return CLIMATES.find((c) => c.city.toLowerCase() === typed);
   }, [climateSlug, destination]);
 
+  /* A destination only counts once it has been chosen from the list, so a
+     trip cannot be made somewhere the live layer has nothing to show. */
+  const [pickedFromList, setPickedFromList] = useState(
+    Boolean(source?.destination),
+  );
+
   /**
    * Destinations come from the bikeshare registry, not the climate table.
    *
@@ -99,10 +105,39 @@ export function TripForm({
   const [matches, setMatches] = useState<
     { city: string; region: string; country: string }[]
   >([]);
+  /* Every city, for people who would rather look than type. Fetched once. */
+  const [allCities, setAllCities] = useState<
+    { city: string; region: string; country: string }[]
+  >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/cities?all=1");
+        if (cancelled || !res.ok) return;
+        const { cities } = (await res.json()) as {
+          cities?: { city: string; region: string; country: string }[];
+        };
+        if (!cancelled) setAllCities(cities ?? []);
+      } catch {
+        /* Searching still works without it. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const q = destination.trim();
-    if (q.length < 2 || climate) {
+    /* Gated on having picked, not on `climate`. The old list came from the
+       climate table and had nothing left to offer once a city resolved — but
+       `climate` also resolves on an exact typed match, so gating on it hid
+       the dropdown for the thirty-five best-known cities. Typing "New York"
+       produced no suggestions at all, and then the form refused the trip for
+       not picking one. */
+    if (q.length < 2 || pickedFromList) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setMatches([]);
       return;
@@ -124,18 +159,13 @@ export function TripForm({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [destination, climate]);
+  }, [destination, pickedFromList]);
 
   /* The destination isn't in the table, so ask rather than guess. Not an error —
      a trip to a village in the Alps is a perfectly good trip. */
   /* Only once they have finished typing. Judging a half-typed destination
      put "WE DON'T KNOW DEL" on screen while someone was still reaching for
      "Delhi", which reads as the form arguing with you mid-word. */
-  /* A destination only counts once it has been chosen from the list, so a
-     trip cannot be made somewhere the live layer has nothing to show. */
-  const [pickedFromList, setPickedFromList] = useState(
-    Boolean(source?.destination),
-  );
   const [destinationSettled, setDestinationSettled] = useState(
     Boolean(source?.destination),
   );
@@ -179,7 +209,7 @@ export function TripForm({
     /* Phrased as an instruction, not a refusal: the list is the only way to
        reach a city the live layer can serve, so say to use it. */
     else if (!pickedFromList) {
-      next.destination = "Choose a city from the list as you type.";
+      next.destination = "Pick a city from the list.";
     }
     if (!startDate) next.startDate = "Pick a start date.";
     if (!endDate) next.endDate = "Pick an end date.";
@@ -250,7 +280,7 @@ export function TripForm({
 
       <Field
         label="Where are you going?"
-        hint="Start typing. These are the cities with live bikeshare."
+        hint="Type to search, or pick from the list. These are the cities with live bikeshare."
         error={errors.destination}
       >
         {(props) => (
@@ -286,6 +316,36 @@ export function TripForm({
                 </>
               )}
             </SuggestionList>
+
+            {allCities.length > 0 && (
+              /* Search or browse, side by side. Typing is faster when you
+                 know the city; the list is for when you don't, and a native
+                 select scrolls and type-aheads for free. */
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="shrink-0 text-small text-muted">
+                  or pick one:
+                </span>
+                <Select
+                  aria-label="Choose a city with live bikeshare"
+                  value={pickedFromList ? destination : ""}
+                  onChange={(e) => {
+                    if (e.target.value) pickDestination(e.target.value);
+                  }}
+                  className="max-w-xs"
+                >
+                  <option value="">
+                    All {allCities.length} cities with bikeshare
+                  </option>
+                  {allCities.map((c) => (
+                    <option key={`${c.city}|${c.region}`} value={c.city}>
+                      {[c.city, c.region, c.country]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
           </>
         )}
       </Field>

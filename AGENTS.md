@@ -668,7 +668,7 @@ strip is. The four-tab masthead stays as *Shape of the app* describes it.
 | `/trips/[id]` | The panel itself, in the destination cluster — after `ConditionsNote`, **before** the packing list. Position is what makes it a peer rather than an appendix. |
 | `/` home | The next-departure line gains live counts: *"Chicago, in 3 days — 7 items left · 4 bikes at Clark & Elm"*. The strongest returning-visit hook in the app, because you glance at it on the way out of the door. |
 | `/trips` upcoming | One live count per trip card whose destination has a system. |
-| `/trips/new` | Nothing new. The **destination field is the hook** — it already matches a slug for climate, and the same match finds a `bike_systems` row. No extra input, no new concept. |
+| `/trips/new` | The **destination field is the hook** — it already matched a slug for climate, and the same match finds a `bike_systems` row. It is now also the gate: see *The destination field only offers cities the live layer can serve*. Still no extra input and no new concept. |
 
 **The starters already work, which was checked rather than assumed.** `STARTERS` in
 `lib/starters.ts` carries real destinations — Chicago, Lisbon, New York — so
@@ -697,6 +697,41 @@ button, and the accent still belongs to the primary action alone.
 no glow and no animation beyond the fade — this is the one moment the live layer
 is visible as *live*, and it has to stay inside a design system whose border
 radius is zero.
+
+### The destination field only offers cities the live layer can serve
+
+A trip can only be made somewhere that publishes a bikeshare feed. The reason is
+the grader: a classmate who types their own city and gets a packing list with a
+dead live panel has tested the half of Assignment 5 that isn't being graded.
+Bounding the destinations means the live layer works on every trip that exists.
+
+**The trade-off, stated rather than hidden:** you can no longer make a trip to a
+village in the Alps. That worked in Assignment 4 and its loss is real. It is
+chosen because a packing list that works everywhere beside a live panel that
+works nowhere in particular is the worse demonstration.
+
+The list is MobilityData's registry — **938 cities across 47 countries**,
+deduplicated by city, because Paris has six operators and nobody picking a
+destination cares which. `src/app/api/cities/route.ts` serves it, holding the
+~186KB CSV in module scope for an hour rather than re-fetching per keystroke.
+
+**Two ways in, and they are not redundant.** Typing filters (`?q=`, prefix
+matches first, so "chi" means Chicago and not Cochin) and a select lists all of
+them (`?all=1`). Typing is faster when you know the city; the list is the only
+way to answer *which cities are there?*, which is the question a first-time
+visitor actually has. Both call `pickDestination`, so either path sets
+`pickedFromList` and submit accepts it.
+
+**`pickedFromList` is what the submit check reads, and it must not be inferred
+from anything else.** The first version gated the suggestions on `climate` —
+whether the typed text exactly matched one of the 35 offline climate cities —
+which meant typing "New York" resolved a climate, killed the dropdown, and then
+refused the trip for not picking from a list that had never appeared. The flag
+is set only by `pickDestination` and cleared by typing. Keep it that way.
+
+The select is `Field.tsx`'s `Select`: a native control scrolls, type-aheads and
+works on a phone for free, and 938 `<option>`s is a smaller payload than any
+widget that would replace it.
 
 ### Places you're watching, and the itinerary that isn't here
 

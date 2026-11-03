@@ -87,10 +87,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "signed-out" }, { status: 401 });
   }
 
-  const q = norm(new URL(request.url).searchParams.get("q") ?? "");
+  const params = new URL(request.url).searchParams;
+  const q = norm(params.get("q") ?? "");
 
   try {
     const all = await cities();
+    /* The whole list, for the browse-all picker. 945 entries is a big select
+       and a small payload — far cheaper than paginating something people
+       scroll once. */
+    if (params.get("all")) return NextResponse.json({ cities: all });
     if (!q) return NextResponse.json({ cities: all.slice(0, 8) });
 
     /* Prefix matches first — someone typing "chi" means Chicago, not Cochin. */
