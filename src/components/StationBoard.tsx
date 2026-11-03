@@ -20,7 +20,7 @@ import {
   type Station,
   type WorkerRun,
 } from "@/lib/stations";
-import type { Trip } from "@/lib/types";
+import type { StayingPlace, Trip } from "@/lib/types";
 
 /**
  * Bikes near where you're staying, live.
@@ -41,15 +41,17 @@ const SELECT =
 
 /** Close enough to walk to from where you're sleeping. */
 const NEAR_METRES = 700;
-/** How many docks to watch. More than a handful is noise, and writes. */
-const WATCH = 4;
+/** Docks shown per place. More than a few is noise, and more writes. */
+const PER_PLACE = 3;
 
 export function StationBoard({
   trip,
-  onSaveStaying,
+  onAddPlace,
+  onRemovePlace,
 }: {
   trip: Trip;
-  onSaveStaying: (staying: string, lat?: number, lon?: number) => void;
+  onAddPlace: (place: StayingPlace) => void;
+  onRemovePlace: (label: string) => void;
 }) {
   const supabase = useSupabase();
   const { user } = useUser();
@@ -57,11 +59,12 @@ export function StationBoard({
 
   const [system, setSystem] = useState<BikeSystem | null>(null);
   const [resolved, setResolved] = useState(false);
-  const [near, setNear] = useState<Station[]>([]);
+  /** Docks within walking distance of each place, keyed by its label. */
+  const [byPlace, setByPlace] = useState<Record<string, Station[]>>({});
   const [latestRun, setLatestRun] = useState<WorkerRun | null>(null);
   const [lastOkRun, setLastOkRun] = useState<WorkerRun | null>(null);
-  const [draft, setDraft] = useState(trip.staying ?? "");
-  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [tick, setTick] = useState(0);
@@ -119,49 +122,66 @@ export function StationBoard({
   }, [loadRuns]);
 
   /**
-   * Find the docks near where they're staying, and register them.
+   * Find the docks near every saved place, and register them.
    *
-   * One effect because the two halves are one thought: the stations we show
-   * are exactly the stations the worker needs to be polling, so working out
-   * which they are and asking for them should not be able to disagree.
+   * One effect because the two halves are one thought: the stations shown are
+   * exactly the stations the worker needs to poll, so working out which they
+   * are and asking for them must not be able to disagree.
    */
+  const placesKey = trip.stayingPlaces
+    .map((p) => `${p.label}@${p.lat},${p.lon}`)
+    .join("|");
+
   useEffect(() => {
     if (!supabase || !system || !user) return;
-    const { stayingLat: lat, stayingLon: lon } = trip;
-    if (lat === undefined || lon === undefined) return;
+    const places = trip.stayingPlaces;
+    if (places.length === 0) {
+      return;
+    }
 
     let cancelled = false;
     (async () => {
-      const pad = 0.012; // ~1.3km box, trimmed by real distance below
-      const { data } = await supabase
-        .from("stations")
-        .select(SELECT)
-        .eq("system_slug", system.slug)
-        .gte("lat", lat - pad)
-        .lte("lat", lat + pad)
-        .gte("lon", lon - pad)
-        .lte("lon", lon + pad)
-        .limit(120);
+      const pad = 0.012; // ~1.3km box per place, trimmed by real distance below
+      const found: Record<string, Station[]> = {};
+      const wanted = new Set<string>();
+
+      for (const place of places) {
+        const { data } = await supabase
+          .from("stations")
+          .select(SELECT)
+          .eq("system_slug", system.slug)
+          .gte("lat", place.lat - pad)
+          .lte("lat", place.lat + pad)
+          .gte("lon", place.lon - pad)
+          .lte("lon", place.lon + pad)
+          .limit(120);
+        if (cancelled) return;
+
+        const closest = (data ?? [])
+          .filter((s) => s.lat !== null && s.lon !== null)
+          .map((s) => ({
+            s,
+            m: metresBetween(place, { lat: s.lat!, lon: s.lon! }),
+          }))
+          .filter((x) => x.m <= NEAR_METRES)
+          .sort((a, b) => a.m - b.m)
+          .slice(0, PER_PLACE);
+
+        found[place.label] = closest.map((x) => x.s);
+        for (const x of closest) wanted.add(x.s.station_id);
+      }
+
       if (cancelled) return;
+      setByPlace(found);
+      if (wanted.size === 0) return;
 
-      const closest = (data ?? [])
-        .filter((s) => s.lat !== null && s.lon !== null)
-        .map((s) => ({ s, m: metresBetween({ lat, lon }, { lat: s.lat!, lon: s.lon! }) }))
-        .filter((x) => x.m <= NEAR_METRES)
-        .sort((a, b) => a.m - b.m)
-        .slice(0, WATCH)
-        .map((x) => x.s);
-
-      setNear(closest);
-      if (closest.length === 0) return;
-
-      /* ignoreDuplicates so a reload is a no-op rather than a conflict, and
-         anything already followed stays followed. */
+      /* ignoreDuplicates so a reload is a no-op, and two places sharing a dock
+         register it once. */
       await supabase.from("station_follows").upsert(
-        closest.map((s) => ({
+        [...wanted].map((station_id) => ({
           user_id: user.id,
           system_slug: system.slug,
-          station_id: s.station_id,
+          station_id,
         })),
         { onConflict: "user_id,system_slug,station_id", ignoreDuplicates: true },
       );
@@ -169,7 +189,8 @@ export function StationBoard({
     return () => {
       cancelled = true;
     };
-  }, [supabase, system, user, trip.stayingLat, trip.stayingLon, trip]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- placesKey is the list
+  }, [supabase, system, user, placesKey]);
 
   /* Realtime. Needs the Clerk token on the socket, set before subscribing and
      refreshed, or Postgres Changes delivers nothing and says nothing. */
@@ -196,11 +217,15 @@ export function StationBoard({
           },
           (payload) => {
             const row = payload.new as Station;
-            setNear((prev) =>
-              prev.map((s) =>
-                s.station_id === row.station_id ? { ...s, ...row } : s,
-              ),
-            );
+            setByPlace((prev) => {
+              const next: Record<string, Station[]> = {};
+              for (const [label, list] of Object.entries(prev)) {
+                next[label] = list.map((s) =>
+                  s.station_id === row.station_id ? { ...s, ...row } : s,
+                );
+              }
+              return next;
+            });
           },
         )
         .on(
@@ -257,8 +282,13 @@ export function StationBoard({
         setError("Couldn't find that. Try a neighbourhood or a nearby street.");
         return;
       }
-      onSaveStaying(text, hit.lat, hit.lon);
-      setEditing(false);
+      /* Adding somewhere already on the list is a no-op rather than an error
+         — the same rule the packing list follows for a repeated item. */
+      if (!trip.stayingPlaces.some((p) => p.label.toLowerCase() === text.toLowerCase())) {
+        onAddPlace({ label: text, lat: hit.lat, lon: hit.lon });
+      }
+      setDraft("");
+      setAdding(false);
     } finally {
       setSaving(false);
     }
@@ -286,19 +316,84 @@ export function StationBoard({
   }
 
   const state: Freshness = freshnessOf(latestRun, lastOkRun);
-  const anchored = trip.stayingLat !== undefined && trip.stayingLon !== undefined;
-  const showForm = editing || !trip.staying;
+  const places = trip.stayingPlaces;
+  const showForm = adding || places.length === 0;
 
   return (
     <TripSection
       title={`Live bikes in ${system.city}`}
       meta={`${system.name} · updating itself`}
-      note={anchored ? COUNTS_EXPLAINER : undefined}
+      note={places.length > 0 ? COUNTS_EXPLAINER : undefined}
     >
+      {places.length > 0 && (
+        <>
+          <FreshnessLine state={state} line={freshnessLine(state, lastOkRun)} />
+
+          {places.map((place) => {
+            const docks = byPlace[place.label] ?? [];
+            return (
+              <div key={place.label} className="mt-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <span className="text-body text-ink">
+                    Near <span className="font-semibold">{place.label}</span>
+                  </span>
+                  <QuietAction
+                    onClick={() => onRemovePlace(place.label)}
+                    label={`Stop watching bikes near ${place.label}`}
+                    className="opacity-100 underline decoration-rule-strong underline-offset-2 hover:text-error"
+                  >
+                    Remove
+                  </QuietAction>
+                </div>
+
+                {docks.length > 0 ? (
+                  <ul className="mt-2 border border-rule-strong bg-surface shadow-raised">
+                    {docks.map((s) => (
+                      <li
+                        key={s.station_id}
+                        className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-rule px-3 py-2 last:border-b-0"
+                      >
+                        <span className="text-ink">{s.name ?? s.station_id}</span>
+                        <span className="flex items-baseline gap-3">
+                          {s.lat !== null && s.lon !== null && (
+                            <Label>
+                              {distanceLabel(
+                                metresBetween(place, { lat: s.lat, lon: s.lon }),
+                              )}
+                            </Label>
+                          )}
+                          <span
+                            className={
+                              s.bikes_available === null
+                                ? "text-small italic text-muted"
+                                : state === "fresh"
+                                  ? "font-semibold text-ink"
+                                  : "text-muted"
+                            }
+                          >
+                            {s.bikes_available === null
+                              ? "counting…"
+                              : countsLabel(s)}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="measure mt-2 text-small text-muted">
+                    No docks within a few minutes&rsquo; walk of there.
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </>
+      )}
+
       {showForm ? (
-        <form onSubmit={save} noValidate className="max-w-md">
+        <form onSubmit={save} noValidate className="mt-4 max-w-md">
           <Field
-            label="Where are you staying?"
+            label={places.length === 0 ? "Where are you staying?" : "Add a place"}
             hint="A neighbourhood, a street, or an address. Saved with the trip, so you only say it once."
             error={error}
           >
@@ -315,14 +410,14 @@ export function StationBoard({
             )}
           </Field>
           <span className="flex items-center gap-3">
-            <Button type="submit">{saving ? "Finding…" : "Save"}</Button>
-            {trip.staying && (
+            <Button type="submit">{saving ? "Finding…" : "Add"}</Button>
+            {places.length > 0 && (
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => {
-                  setDraft(trip.staying ?? "");
-                  setEditing(false);
+                  setDraft("");
+                  setAdding(false);
                   setError(undefined);
                 }}
               >
@@ -332,63 +427,16 @@ export function StationBoard({
           </span>
         </form>
       ) : (
-        <>
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <span className="text-body text-ink">
-              Near <span className="font-semibold">{trip.staying}</span>
-            </span>
-            <QuietAction
-              onClick={() => setEditing(true)}
-              label="Change where you're staying"
-              className="opacity-100 underline decoration-rule-strong underline-offset-2 hover:text-ink"
-            >
-              Change
-            </QuietAction>
-          </div>
-
-          <FreshnessLine state={state} line={freshnessLine(state, lastOkRun)} />
-
-          {near.length > 0 ? (
-            <ul className="mt-3 border border-rule-strong bg-surface shadow-raised">
-              {near.map((s) => (
-                <li
-                  key={s.station_id}
-                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-rule px-3 py-2 last:border-b-0"
-                >
-                  <span className="text-ink">{s.name ?? s.station_id}</span>
-                  <span className="flex items-baseline gap-3">
-                    {s.lat !== null && s.lon !== null && (
-                      <Label>
-                        {distanceLabel(
-                          metresBetween(
-                            { lat: trip.stayingLat!, lon: trip.stayingLon! },
-                            { lat: s.lat, lon: s.lon },
-                          ),
-                        )}
-                      </Label>
-                    )}
-                    <span
-                      className={
-                        s.bikes_available === null
-                          ? "text-small italic text-muted"
-                          : state === "fresh"
-                            ? "font-semibold text-ink"
-                            : "text-muted"
-                      }
-                    >
-                      {s.bikes_available === null ? "counting…" : countsLabel(s)}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="measure mt-3 text-small text-muted">
-              No docks within a few minutes&rsquo; walk of there. Try a nearby
-              street or a wider landmark.
-            </p>
-          )}
-        </>
+        /* Adding a second neighbourhood is comparing two, which is half of
+           what the counts are for — so it is an always-visible invitation,
+           not something folded away. */
+        <QuietAction
+          onClick={() => setAdding(true)}
+          label="Add another place to watch"
+          className="mt-4 inline-block opacity-100 underline decoration-rule-strong underline-offset-4 hover:text-ink"
+        >
+          + Add another place
+        </QuietAction>
       )}
     </TripSection>
   );

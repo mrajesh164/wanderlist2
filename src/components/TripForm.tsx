@@ -152,6 +152,7 @@ export function TripForm({
       manualWetness: climate ? undefined : wetness,
       startDate,
       endDate,
+      stayingPlaces: [],
       items: buildPackingList(conditions, days, repeatOf?.learned),
       createdAt: new Date().toISOString(),
       // Carry the corrections forward — this is what makes a repeat cheap.

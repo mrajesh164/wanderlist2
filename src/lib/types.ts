@@ -66,6 +66,15 @@ export type TripReview = {
   reviewedAt: string;
 };
 
+/** Somewhere on a trip worth knowing the bike counts near. */
+export type StayingPlace = {
+  /** Exactly what the person typed — shown back to them, not a geocoder label. */
+  label: string;
+  /** Resolved once, server-side, and cached so it isn't looked up every load. */
+  lat: number;
+  lon: number;
+};
+
 export type Trip = {
   id: string;
   /** What you call this trip: "Thanksgiving at my parents'". */
@@ -78,18 +87,15 @@ export type Trip = {
   manualBand?: TempBand;
   manualWetness?: Wetness;
   /**
-   * Where you're staying — a neighbourhood, a street, a hotel's address.
+   * Places on this trip you want live bike counts for — where you're staying,
+   * and any neighbourhood you're weighing up.
    *
    * Saved on the trip rather than typed into a search box, so it survives
-   * signing out and follows you to another device. It is what the live bikes
-   * panel anchors on; without it there is nothing better than a city centre,
-   * which is nobody's hotel.
+   * signing out and follows you to another device. A list rather than one
+   * field because choosing between neighbourhoods is half of what the counts
+   * are for.
    */
-  staying?: string;
-  /** Cached from the geocoder, so the same string isn't resolved every load.
-   *  Absent when the geocoder couldn't place what was typed. */
-  stayingLat?: number;
-  stayingLon?: number;
+  stayingPlaces: StayingPlace[];
   startDate: DateString;
   endDate: DateString;
   items: Item[];

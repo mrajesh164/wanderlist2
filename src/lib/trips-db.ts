@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Item, KitItem, Trip, TripReview } from "./types";
+import type { Item, KitItem, StayingPlace, Trip, TripReview } from "./types";
 import type { TempBand, Wetness } from "./climate";
 
 /**
@@ -18,9 +18,7 @@ type TripRow = {
   name: string;
   destination: string;
   climate_slug: string | null;
-  staying: string | null;
-  staying_lat: number | null;
-  staying_lon: number | null;
+  staying_places: StayingPlace[] | null;
   manual_band: string | null;
   manual_wetness: string | null;
   start_date: string;
@@ -47,9 +45,7 @@ function toTrip(row: TripRow): Trip {
     name: row.name,
     destination: row.destination,
     climateSlug: row.climate_slug ?? undefined,
-    staying: row.staying ?? undefined,
-    stayingLat: row.staying_lat ?? undefined,
-    stayingLon: row.staying_lon ?? undefined,
+    stayingPlaces: row.staying_places ?? [],
     manualBand: (row.manual_band as TempBand | null) ?? undefined,
     manualWetness: (row.manual_wetness as Wetness | null) ?? undefined,
     startDate: row.start_date,
@@ -75,9 +71,7 @@ function toTripPayload(trip: Trip, userId: string) {
     name: trip.name,
     destination: trip.destination,
     climate_slug: trip.climateSlug ?? null,
-    staying: trip.staying ?? null,
-    staying_lat: trip.stayingLat ?? null,
-    staying_lon: trip.stayingLon ?? null,
+    staying_places: trip.stayingPlaces ?? [],
     manual_band: trip.manualBand ?? null,
     manual_wetness: trip.manualWetness ?? null,
     start_date: trip.startDate,

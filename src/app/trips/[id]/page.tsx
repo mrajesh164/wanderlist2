@@ -236,12 +236,16 @@ function Checklist() {
           half of this page, not an appendix to the list. */}
       <StationBoard
         trip={trip}
-        onSaveStaying={(staying, lat, lon) =>
+        onAddPlace={(place) =>
           updateTrip(trip.id, (t) => ({
             ...t,
-            staying,
-            stayingLat: lat,
-            stayingLon: lon,
+            stayingPlaces: [...t.stayingPlaces, place],
+          }))
+        }
+        onRemovePlace={(label) =>
+          updateTrip(trip.id, (t) => ({
+            ...t,
+            stayingPlaces: t.stayingPlaces.filter((p) => p.label !== label),
           }))
         }
       />

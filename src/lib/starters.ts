@@ -91,6 +91,7 @@ export function createStarterTrip(starter: Starter): Trip {
     climateSlug: starter.climateSlug,
     startDate,
     endDate,
+    stayingPlaces: [],
     items: conditions ? buildPackingList(conditions, starter.days) : [],
     createdAt: new Date().toISOString(),
     learned: { drop: [], add: [] },
