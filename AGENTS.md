@@ -745,10 +745,10 @@ names. Offering those names directly is what put Pittsburgh in the picker and
 then told the person "No docked bikeshare in Pittsburgh" — a sentence that was
 false twice over. `scripts/verify-systems.mjs` probes every registry entry end
 to end and the ones that survive get a `verified_at` on their `bike_systems`
-row; `/api/cities` offers exactly those. **250 cities, 37 countries** on the run
+row; `/api/cities` offers exactly those. **244 cities, 36 countries** on the run
 committed here.
 
-Five gates, each added because a real system failed it in a way that reached
+Six gates, each added because a real system failed it in a way that reached
 the screen. The script's header is the long version:
 
 | Gate | Rejected | Why it exists |
@@ -758,6 +758,7 @@ the screen. The script's header is the long version:
 | Some station reports free docks | 136 | Dott Paris: 12,667 stations, `num_docks_available` on none |
 | Some station has a bike right now | 16 | Denver's system shut down in 2020 and its 119 docks still report 16 empty spaces, forever |
 | The city name geocodes within 100 km of its own stations | 40 | The weather half — see below |
+| The name is a place, not a country | 6 | Nationwide systems file themselves under "Germany", "Switzerland" |
 
 **That last gate is how "no weather data" is caught, and it earns its place
 twice.** `/api/climate` geocodes the destination string, so the test is whether
@@ -774,6 +775,15 @@ Brest, FR      -> Brest, Belarus             2,047 km
 Losing Cornwall is a real cost. It is taken because the alternative is a trip
 that confidently packs you for the wrong continent, and `geocode()` takes the
 first hit by design.
+
+**A country is not a destination**, and six nationwide systems file themselves
+under one — Switzerland's has 12,563 stations. They clear the distance gate
+honestly, since a compact country's centroid really is near its stations, so
+the test is Open-Meteo's own `feature_code`: `PCLI` is a country, `PPL*` is a
+populated place. City-states keep working because Monaco and Singapore both
+come back `PPLC`. Luxembourg is out, correctly: the name geocodes to the
+country rather than the city, so the weather would have been the country's
+centroid either way.
 
 **What is deliberately NOT a gate: whether the operator calls them bikes or
 scooters.** That was tried and it cannot be done honestly — `form_factor` in
@@ -813,7 +823,7 @@ refused the trip for not picking from a list that had never appeared. The flag
 is set only by `pickDestination` and cleared by typing. Keep it that way.
 
 The select is `Field.tsx`'s `Select`: a native control scrolls, type-aheads and
-works on a phone for free, and 250 `<option>`s is a smaller payload than any
+works on a phone for free, and 244 `<option>`s is a smaller payload than any
 widget that would replace it.
 
 ### GBFS 3.0 renamed more than names

@@ -139,7 +139,21 @@ const km = (a, b) => {
   return Math.round(Math.sqrt(x * x + y * y) * R);
 };
 
-/** The same call `/api/climate` makes: count=1, language=en. */
+/**
+ * The same call `/api/climate` makes: count=1, language=en.
+ *
+ * Returns the distance in km from where the stations actually are, or null if
+ * the name cannot be used as a destination at all.
+ *
+ * **A country is not a destination.** Several registry rows name one, because
+ * the system is nationwide: "Czechia", "Germany", "Switzerland" (12,563
+ * stations). Those geocode fine, and for a compact country the centroid even
+ * lands within the distance gate — but "the weather in Germany" is the weather
+ * at a point in Hesse, and the nearest dock to "Germany" means nothing.
+ * `feature_code` says it outright: PCLI is a country, PPL* is a populated
+ * place, and city-states keep working because Monaco and Singapore come back
+ * PPLC.
+ */
 async function geocodeDistance(city, centre) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -154,6 +168,7 @@ async function geocodeDistance(city, centre) {
       if (!res.ok) return null;
       const hit = (await res.json()).results?.[0];
       if (!hit) return null;
+      if (String(hit.feature_code ?? "").startsWith("PCL")) return null;
       return km({ lat: hit.latitude, lon: hit.longitude }, centre);
     } catch {
       return null;
