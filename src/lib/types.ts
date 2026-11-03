@@ -96,6 +96,13 @@ export type Trip = {
    * are for.
    */
   stayingPlaces: StayingPlace[];
+  /**
+   * Whether this trip has been offered its default place (the city itself).
+   *
+   * Exists so the default can be removed and stay removed. "Add the city when
+   * the list is empty" would put it back on the next load.
+   */
+  placesInitialised?: boolean;
   startDate: DateString;
   endDate: DateString;
   items: Item[];

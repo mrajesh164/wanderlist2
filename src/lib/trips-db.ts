@@ -26,6 +26,7 @@ type TripRow = {
   destination: string;
   climate_slug: string | null;
   staying_places: StayingPlace[] | null;
+  places_initialised: boolean | null;
   manual_band: string | null;
   manual_wetness: string | null;
   start_date: string;
@@ -55,6 +56,7 @@ function toTrip(row: TripRow): Trip {
     destination: row.destination,
     climateSlug: row.climate_slug ?? undefined,
     stayingPlaces: row.staying_places ?? [],
+    placesInitialised: row.places_initialised ?? false,
     manualBand: (row.manual_band as TempBand | null) ?? undefined,
     manualWetness: (row.manual_wetness as Wetness | null) ?? undefined,
     startDate: row.start_date,
@@ -81,6 +83,7 @@ function toTripPayload(trip: Trip, userId: string) {
     destination: trip.destination,
     climate_slug: trip.climateSlug ?? null,
     staying_places: trip.stayingPlaces ?? [],
+    places_initialised: trip.placesInitialised ?? false,
     manual_band: trip.manualBand ?? null,
     manual_wetness: trip.manualWetness ?? null,
     start_date: trip.startDate,

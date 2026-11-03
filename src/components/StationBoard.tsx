@@ -160,6 +160,27 @@ export function StationBoard({
   }, [loadRuns]);
 
   /**
+   * Start a new trip on the city itself rather than on a blank question.
+   *
+   * The city centre is a rougher anchor than a neighbourhood, but it is a
+   * real one, and `bike_systems` already knows it — so the panel can show
+   * live counts the moment the trip exists instead of asking first. Someone
+   * who knows where they're staying replaces it; someone who doesn't yet
+   * still sees the thing that makes this app worth opening.
+   *
+   * Guarded by `placesInitialised` rather than "is the list empty", so that
+   * deleting the default keeps it deleted. The empty-list rule would put it
+   * straight back on the next load.
+   */
+  useEffect(() => {
+    if (!supabase || !system || trip.placesInitialised) return;
+    if (trip.stayingPlaces.length > 0) return;
+    if (system.lat === null || system.lon === null) return;
+    onAddPlace({ label: system.city, lat: system.lat, lon: system.lon });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per trip
+  }, [supabase, system, trip.placesInitialised]);
+
+  /**
    * Load a system's stations the first time anybody needs them.
    *
    * A `bike_systems` row is only an address — it says where to fetch, not

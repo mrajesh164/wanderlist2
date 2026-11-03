@@ -240,12 +240,18 @@ function Checklist() {
           updateTrip(trip.id, (t) => ({
             ...t,
             stayingPlaces: [...t.stayingPlaces, place],
+            /* Set either way: once a trip has places, by hand or by default,
+               it should never be offered the default again. */
+            placesInitialised: true,
           }))
         }
         onRemovePlace={(label) =>
           updateTrip(trip.id, (t) => ({
             ...t,
             stayingPlaces: t.stayingPlaces.filter((p) => p.label !== label),
+            /* Stays true: removing the last place means they want none, not
+               that they want the city offered again. */
+            placesInitialised: true,
           }))
         }
       />
