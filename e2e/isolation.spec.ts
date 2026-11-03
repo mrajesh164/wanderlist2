@@ -31,7 +31,7 @@ const USERS = {
     /* Unique per run, so a leftover row from an earlier run can never be
        mistaken for a leak — and so a leak is unmistakably *this* run's. */
     trip: `A-only-${Date.now()}`,
-    destination: "Reykjavik",
+    destination: "Oslo",
   },
   b: {
     email: "wanderlist-b+clerk_test@example.com",
@@ -97,7 +97,15 @@ async function createTrip(
      picker — so these are deliberately literal and will fail loudly if the
      copy changes, which is the right failure. */
   await page.getByLabel("What's the trip?").fill(name);
-  await page.getByLabel("Where are you going?").fill(destination);
+
+  /* Picked from the list, not typed, because the form now requires it: a
+     destination has to be a city the live layer can actually serve. Typing
+     the name and submitting used to work and no longer does, which is how
+     this test caught that change. Driving the real path is also the better
+     test -- it is what a person does. */
+  await page.getByLabel("Where are you going?").fill(destination.slice(0, 4));
+  await page.getByRole("button", { name: new RegExp(destination) }).first().click();
+  await expect(page.getByLabel("Where are you going?")).toHaveValue(destination);
 
   /* Dates: a week, starting a fortnight out, so the trip lands in "Upcoming"
      rather than "Previous". */
