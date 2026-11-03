@@ -93,7 +93,14 @@ export function TripForm({
 
   /* The destination isn't in the table, so ask rather than guess. Not an error —
      a trip to a village in the Alps is a perfectly good trip. */
-  const needsManualConditions = destination.trim().length > 0 && !climate;
+  /* Only once they have finished typing. Judging a half-typed destination
+     put "WE DON'T KNOW DEL" on screen while someone was still reaching for
+     "Delhi", which reads as the form arguing with you mid-word. */
+  const [destinationSettled, setDestinationSettled] = useState(
+    Boolean(source?.destination),
+  );
+  const needsManualConditions =
+    destinationSettled && destination.trim().length > 0 && !climate;
 
   /* Live preview: what this form is about to build. */
   const preview = useMemo(() => {
@@ -114,6 +121,7 @@ export function TripForm({
   }, [startDate, endDate, climate, needsManualConditions, band, wetness, repeatOf, kit]);
 
   function pickDestination(slug: string, city: string) {
+    setDestinationSettled(true);
     setClimateSlug(slug);
     setDestination(city);
     setErrors((e) => ({ ...e, destination: undefined }));
@@ -207,10 +215,12 @@ export function TripForm({
               onChange={(e) => {
                 setDestination(e.target.value);
                 setClimateSlug("");
+                setDestinationSettled(false);
                 if (errors.destination) {
                   setErrors((x) => ({ ...x, destination: undefined }));
                 }
               }}
+              onBlur={() => setDestinationSettled(true)}
             />
             <SuggestionList
               items={matches}
@@ -264,11 +274,20 @@ export function TripForm({
       {needsManualConditions && (
         <fieldset className="mb-6 border border-rule bg-surface p-4">
           <legend className="px-1 font-sans text-label uppercase text-muted">
-            We don&apos;t know {destination.trim()}
+            Roughly what to expect
           </legend>
+          {/* The old legend echoed whatever had been typed, uppercased — "WE
+              DON'T KNOW DEL" — which looked like a bug and overstated the
+              problem. The app has typical weather for 35 places *offline*;
+              everywhere else it fetches real normals from Open-Meteo when the
+              trip opens. So this is only needed to build the first list, and
+              saying so is both truer and less alarming than claiming
+              ignorance of the place. */}
           <p className="measure mb-4 text-small text-muted">
-            Tell us roughly what to expect and the list will still be built
-            properly.
+            We don&apos;t have {destination.trim() || "that place"} saved
+            offline, so tell us roughly what to expect and the first list will
+            still be right. Real weather for your dates loads when you open the
+            trip.
           </p>
 
           <Field label="How warm is it then?">

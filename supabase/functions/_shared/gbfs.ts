@@ -67,6 +67,27 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
 }
 
+/**
+ * A station name, from either GBFS generation.
+ *
+ * Up to 2.x `name` is a plain string. **GBFS 3.0 made it a localised array** —
+ * `[{ text, language }, …]` — and a plain-string check returns null for it, so
+ * every station in a 3.0 feed came out nameless and the UI fell back to
+ * showing numeric ids. Toronto did exactly that: 1,075 stations, every one
+ * displayed as "7713".
+ *
+ * Prefers English, falls back to the first entry, because a name in the wrong
+ * language still beats an id.
+ */
+function localised(v: unknown): string | null {
+  const plain = str(v);
+  if (plain) return plain;
+  if (!Array.isArray(v)) return null;
+  const entries = v as { text?: unknown; language?: unknown }[];
+  const en = entries.find((e) => e?.language === "en");
+  return str(en?.text) ?? str(entries[0]?.text);
+}
+
 /** GBFS reports times as unix seconds; the column is timestamptz. */
 export function unixToISO(v: unknown): string | null {
   const n = num(v);
@@ -114,7 +135,7 @@ export function parseInformation(
     out.push({
       system_slug: systemSlug,
       station_id: id,
-      name: str(s?.name),
+      name: localised(s?.name),
       lat: num(s?.lat),
       lon: num(s?.lon),
       capacity: num(s?.capacity),
