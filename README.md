@@ -193,6 +193,15 @@ That is what `worker_runs` is for.
 Thresholds are expressed in cron intervals rather than seconds, so changing the schedule
 can't silently leave the page lying about how current it is.
 
+**The page also polls `worker_runs` every 20 seconds, and that is not belt and
+braces.** Realtime delivering an insert used to be the *only* thing that moved
+the line. Miss one — dropped socket, laptop lid, backgrounded tab — and it never
+moved again while the age kept recomputing, so the panel read "Last updated 1
+minute ago" in the stale style against a worker with 5,000 successful runs and
+no failures. A component that reports on a pipe must not learn about the pipe
+only through the pipe. Twenty seconds because 20s of stale read plus a 30s cron
+gap has to stay under the threshold that would mislabel a healthy one.
+
 ### Where the API is called, and why there
 
 **Nowhere in the browser.** Every `fetch` in `src/` is same-origin. The GBFS feed is
@@ -561,8 +570,12 @@ Every control comes from one of three files (`Button`, `Field`, `Controls`); a g
 npm install
 npm run dev          # http://localhost:3000
 npm run build        # the check that actually catches things
-npm run test:e2e     # the two-user isolation test
+npm test             # what the worker writes, against saved feeds — no services needed
+npm run test:e2e     # the two-user isolation test — needs Clerk and Supabase
 ```
+
+`npm test` is the one you can run without an account anywhere: the fixtures are
+on disk, so it needs no network, no database and no keys.
 
 It needs a Clerk application and a Supabase project of your own. Put their keys in
 `.env.local`, which is gitignored and which agents working in this repo are denied read,
@@ -588,6 +601,20 @@ worker's service role key is injected by Supabase on its own servers and never a
 here, and the cron job calls the function with the project's *anon* key, which is public
 by design. Migrations live in
 [`supabase/migrations/`](./supabase/migrations) and run in filename order.
+
+The destination catalogue is generated rather than committed by hand. To refresh
+it — about four minutes:
+
+```bash
+node scripts/verify-systems.mjs > supabase/migrations/$(date +%Y%m%d%H%M%S)_verified_systems.sql
+```
+
+```bash
+node --env-file=.env.local scripts/apply-verified.mjs supabase/migrations/<that file>
+```
+
+The first is a read-only probe anyone can run and diff; only the second needs the
+service-role key, because `bike_systems` refuses client writes by policy.
 
 There's a **Reset to first visit** control in the footer, which is the quickest way to see
 the onboarding again — it's otherwise unreachable once you've saved a trip. It now deletes
