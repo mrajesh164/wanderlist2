@@ -299,6 +299,7 @@ export function StationBoard({
     if (!supabase || !system || !session) return;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let refresh: ReturnType<typeof setInterval> | null = null;
+    let poll: ReturnType<typeof setInterval> | null = null;
     let cancelled = false;
 
     (async () => {
@@ -340,11 +341,31 @@ export function StationBoard({
         const next = await session.getToken();
         if (next) supabase.realtime.setAuth(next);
       }, 45_000);
+
+      /**
+       * A fallback read of `worker_runs`, because otherwise the websocket is
+       * the *only* thing that moves the freshness line.
+       *
+       * Miss one `INSERT` — a dropped socket, a laptop lid, a backgrounded
+       * tab — and `lastOkRun` never moves again. The age ticks up every five
+       * seconds regardless, crosses the 60s threshold, and the panel says
+       * "Last updated 1 minute ago" in the stale style while the worker is
+       * in fact succeeding every thirty seconds. Observed exactly that
+       * against a worker with 5,252 runs and zero failures in the window.
+       *
+       * The component already claims the pipe is healthy or not; it owes the
+       * reader a way to find that out that doesn't depend on the pipe. Two
+       * single-row queries every twenty seconds is the cheapest honest
+       * answer, and twenty keeps the worst case (20s stale read + 30s cron
+       * gap) under the threshold that would mislabel it.
+       */
+      poll = setInterval(() => void loadRuns(), 20_000);
     })();
 
     return () => {
       cancelled = true;
       if (refresh) clearInterval(refresh);
+      if (poll) clearInterval(poll);
       if (channel) void supabase.removeChannel(channel);
     };
   }, [supabase, system, session, loadRuns]);

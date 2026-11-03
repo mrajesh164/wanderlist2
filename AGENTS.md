@@ -721,6 +721,17 @@ states as specified above, and *stale* and *down* must not look alike. Per the
 design system an error is a rule, an icon and a tint — never an accent-coloured
 button, and the accent still belongs to the primary action alone.
 
+**The freshness line needs a fallback read, and this was found the hard way.**
+Realtime delivering a `worker_runs` INSERT was the only thing that moved
+`lastOkRun`. Miss one — dropped socket, laptop lid, backgrounded tab — and it
+never moves again, while the age recomputes every five seconds and sails past
+the 60s threshold. The panel then says "Last updated 1 minute ago" in the stale
+style with the worker succeeding every thirty seconds; checked against 5,252
+runs and zero failures in the window. `StationBoard` now also polls
+`worker_runs` every 20s. The number matters: 20s of stale read plus a 30s cron
+gap stays under the threshold that would mislabel a healthy pipe. A component
+that reports on a pipe must not learn about the pipe only through the pipe.
+
 **When a row changes, tint it briefly and let it fade.** `selected` (`#EDD8CC`),
 no glow and no animation beyond the fade — this is the one moment the live layer
 is visible as *live*, and it has to stay inside a design system whose border
